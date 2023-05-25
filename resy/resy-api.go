@@ -68,7 +68,6 @@ func (api *ResyAPI) PostReservation(paymentMethodID string, bookToken string) (s
 
 // sendGetRequest sends a GET request
 func sendGetRequest(resyToken config.ResyKeys, baseURL string, queryParams url.Values) (string, error) {
-	fmt.Println("Sending Get Request")
 	url := fmt.Sprintf("https://%s?%s", baseURL, queryParams.Encode())
 
 	client := &http.Client{}
@@ -95,7 +94,6 @@ func sendGetRequest(resyToken config.ResyKeys, baseURL string, queryParams url.V
 }
 
 func sendPostRequest(resyKeys config.ResyKeys, baseURL string, queryParams map[string]string) (string, error) {
-	fmt.Println("Sending Post Request from BookRes")
 	url := fmt.Sprintf("https://%s", baseURL)
 
 	post := stringifyQueryParams(queryParams)

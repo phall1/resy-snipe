@@ -9,7 +9,7 @@ import (
 
 func main() {
     // Set the time when you want the program to execute
-    scheduledTime := time.Date(2023, time.May, 25, config.SnipeTimee.Hours, config.SnipeTimee.Minutes, 0, 0, time.Local)
+    scheduledTime := time.Date(2023, time.May, 26, config.SnipeTimee.Hours, config.SnipeTimee.Minutes, 0, 0, time.Local)
 
     // Calculate the duration until the scheduled time
     duration := scheduledTime.Sub(time.Now())

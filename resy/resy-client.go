@@ -38,7 +38,6 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
         return "", errors.New("noReservationTimeTypesMsg")
     }
 
-    fmt.Println("GetReservations")
     resp, err := rc.resyApi.GetReservations(date, partySize, venueId)
     if err != nil {
         return "", err
@@ -56,16 +55,10 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
     }
 
     // Accessing values
-    query := extractedValues["query"].(map[string]interface{})
-    day := query["day"].(string)
+    // query := extractedValues["query"].(map[string]interface{})
+    // day := query["day"].(string)
     results := extractedValues["results"].(map[string]interface{})
     venues := results["venues"].([]interface{})
-    
-    // Print the extracted values
-    fmt.Println("Day:", day)
-    fmt.Println("Party Size:", partySize)
-
-    fmt.Println("Venues:")
     for _, v := range venues {
         venue := v.(map[string]interface{})
         slots := venue["slots"].([]interface{})
@@ -95,43 +88,20 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
             continue
         }
 
-        // fmt.Println("r.ReservationTime")
-        // fmt.Println(r.ReservationTime)
-
         var firstKey string
-
         for key, _ := range tableTypeMap {
             firstKey = key
             break
         }
 
         if r.TableType != nil {
-            // fmt.Println("*r.TableType")
             // fmt.Println(*r.TableType)
+            return tableTypeMap[*r.TableType], nil
         } else {
             if ok {
                 return tableTypeMap[firstKey], nil
             }
         }
-
-        // fmt.Println("TableTypeMap")
-        // fmt.Println(tableTypeMap)
-
-        // var tableId string
-        //
-        // Checks if TableType is nil and assigns Table Type to tableId
-        // if r.TableType != nil {
-        //     tableId, ok = tableTypeMap[*r.TableType]
-        //     if !ok {
-        //         continue
-        //     }
-        // }
-        // fmt.Println(tableId)
-        //
-        // configId, err := rc.resyApi.PostReservation(date, partySize, tableId, venueId)
-        // if err == nil {
-        //     return configId, nil
-        // }
     }
 
     if time.Now().UnixNano()/int64(time.Millisecond)-start >= millisToRetry {
@@ -180,14 +150,9 @@ func (rc *ResyClient) getReservationDetails(configId string, date string, partyS
 // returns: unique identifier of the confirmed booking
 func (rc *ResyClient) BookReservation(paymentMethodID string, bookToken string) (string, error) {
     resp, err := rc.resyApi.PostReservation(paymentMethodID, bookToken)
-    fmt.Println("resp: ", resp)
-    fmt.Println("err: ", err)
     if err != nil {
         return "", err
     }
-
-    fmt.Println("resp")
-    fmt.Printf("Type of resp: %T\n", resp)
 
     var resyToken string
     resyToken = resp
@@ -197,11 +162,9 @@ func (rc *ResyClient) BookReservation(paymentMethodID string, bookToken string) 
     //     fmt.Println(err)
     //     return "", err
     // }
-    // resyToken = resp["resy_token"]
     fmt.Println("Headshot!")
     fmt.Println("(҂‾ ▵‾)︻デ═一 (× _ ×#")
     fmt.Println("Successfully sniped reservation")
-    fmt.Println("Resy token is %s", resyToken)
 
     return resyToken, nil
 }

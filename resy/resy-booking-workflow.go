@@ -36,8 +36,6 @@ func (r *ResyBookingWorkflow) runnable(millisToRetry time.Duration, dateTimeStar
     var resyTokenErr error
     if configId != "" {
         bookingDetails, err := r.resyClient.getReservationDetails(configId, r.resDetails.Date, r.resDetails.PartySize)
-        fmt.Println("bookingDetails.PaymentMethodID: ", bookingDetails.PaymentMethodID)
-        fmt.Println("bookingDetails.BookToken: ", bookingDetails.BookToken)
         if err != nil {
             fmt.Println(err)
             return "", err
