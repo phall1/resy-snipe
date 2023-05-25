@@ -1,7 +1,7 @@
 package resy
 
 import (
-    "os"
+    // "os"
     "fmt"
     "time"
     "errors"
@@ -44,27 +44,16 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
         return "", err
     }
 
-    // fmt.Println("resp: ")
-    // fmt.Println(resp)
-    fmt.Printf("resp: %T\n", resp)
-
-    // Convert the response into the reservations table?
+    // Create variables to store collected reservation information
     var reservations = make(ReservationMap)
-    
-    // reservations = buildReservationMap(resp)
-
     var extractedValues map[string]interface{}
 
+    // Convert `resp` (response from api.GetReservations) to a byte string then to a map of cascading maps
     respBytes := []byte(resp)
     err = json.Unmarshal(respBytes, &extractedValues)
-    fmt.Println("err")
-    fmt.Println(err)
     if err != nil {
         return "", err
     }
-
-    // fmt.Println("extractedValues")
-    // fmt.Println(extractedValues)
 
     // Accessing values
     query := extractedValues["query"].(map[string]interface{})
@@ -87,11 +76,6 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
             start := strings.Split(start_date["start"].(string), " ")[1]
             table_type := config["type"].(string)
             config_id := config["token"].(string)
-
-            // fmt.Println(" - start:", start)
-            // fmt.Println(" - table_type:", table_type)
-            // fmt.Println(" - token:", config_id)
-            
             if _, ok := reservations[start]; !ok {
                 reservations[start] = TableTypeMap {
                     table_type: config_id,
@@ -102,52 +86,56 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
         }
     }
 
-    // fmt.Println("reservations")
-    // fmt.Println(reservations)
+    // Now we have the reservation map
+    // Now find a matching reservation
 
     for _, r := range resTimeTypes {
-        // fmt.Println("r.ReservationTime")
-        // fmt.Println(r.ReservationTime)
-        if r.TableType != nil {
-            fmt.Println("*r.TableType")
-            fmt.Println(*r.TableType)
-        }
-        fmt.Println("r.ReservationTime")
-        fmt.Println(r.ReservationTime)
-        
         tableTypeMap, ok := reservations[r.ReservationTime]
-        // fmt.Println("ok")
-        // fmt.Println(ok)
         if !ok {
             continue
         }
 
-        fmt.Println("TableTypeMap")
-        fmt.Println(tableTypeMap)
+        // fmt.Println("r.ReservationTime")
+        // fmt.Println(r.ReservationTime)
 
-        
+        var firstKey string
 
-        // tableId, ok := tableTypeMap[*r.TableType]
-        // if !ok {
-        //     continue
+        for key, _ := range tableTypeMap {
+            firstKey = key
+            break
+        }
+
+        if r.TableType != nil {
+            // fmt.Println("*r.TableType")
+            // fmt.Println(*r.TableType)
+        } else {
+            if ok {
+                return tableTypeMap[firstKey], nil
+            }
+        }
+
+        // fmt.Println("TableTypeMap")
+        // fmt.Println(tableTypeMap)
+
+        // var tableId string
+        //
+        // Checks if TableType is nil and assigns Table Type to tableId
+        // if r.TableType != nil {
+        //     tableId, ok = tableTypeMap[*r.TableType]
+        //     if !ok {
+        //         continue
+        //     }
         // }
-
-        // Should be checking if the reservation is open here
-        // If tabeID then we should be able to client.getResDetails? 
-        // Get Details then client.bookReservation
-
-        // Find ReservationTime(reservations, resTimeTypes)
-
+        // fmt.Println(tableId)
+        //
         // configId, err := rc.resyApi.PostReservation(date, partySize, tableId, venueId)
         // if err == nil {
         //     return configId, nil
         // }
     }
 
-    os.Exit(24)
-
     if time.Now().UnixNano()/int64(time.Millisecond)-start >= millisToRetry {
-        return "", errors.New(fmt.Sprintf("couldNotFindResMsgFmt", date, partySize))
+        return "", errors.New(fmt.Sprintf("couldNotFindResMsgFmt %s %d", date, partySize))
     }
 
     time.Sleep(time.Duration(retryIntervalMs) * time.Millisecond)
@@ -178,8 +166,7 @@ func (rc *ResyClient) getReservationDetails(configId string, date string, partyS
 
     // Searching this JSON structure...
     // {"book_token": {"value": "BOOK_TOKEN", ...}}
-    bookToken := resDetails["book_token"].(map[string]interface{})["value"].(string)[1:len(resDetails["book_token"].(map[string]interface{})["value"].(string))-1]
-
+    bookToken := resDetails["book_token"].(map[string]interface{})["value"].(string)[0:len(resDetails["book_token"].(map[string]interface{})["value"].(string))]
 
     return &BookingDetails{
         PaymentMethodID: paymentMethodId,
@@ -193,16 +180,24 @@ func (rc *ResyClient) getReservationDetails(configId string, date string, partyS
 // returns: unique identifier of the confirmed booking
 func (rc *ResyClient) BookReservation(paymentMethodID string, bookToken string) (string, error) {
     resp, err := rc.resyApi.PostReservation(paymentMethodID, bookToken)
+    fmt.Println("resp: ", resp)
+    fmt.Println("err: ", err)
     if err != nil {
         return "", err
     }
 
-    var resyToken string
-    respBytes := []byte(resp)
-    if err := json.Unmarshal(respBytes, &resyToken); err != nil {
-        return "", err
-    }
+    fmt.Println("resp")
+    fmt.Printf("Type of resp: %T\n", resp)
 
+    var resyToken string
+    resyToken = resp
+    // respBytes := []byte(resp)
+    // if err := json.Unmarshal(respBytes, &resyToken); err != nil {
+    //     fmt.Println("err")
+    //     fmt.Println(err)
+    //     return "", err
+    // }
+    // resyToken = resp["resy_token"]
     fmt.Println("Headshot!")
     fmt.Println("(҂‾ ▵‾)︻デ═一 (× _ ×#")
     fmt.Println("Successfully sniped reservation")

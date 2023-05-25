@@ -53,7 +53,7 @@ func (api *ResyAPI) GetReservationDetails(configID string, date string, partySiz
 func (api *ResyAPI) PostReservation(paymentMethodID string, bookToken string) (string, error) {
 	queryParams := url.Values{
 		"book_token":            {bookToken},
-		"struct_payment_method": {fmt.Sprintf(`{"id":%d}`, paymentMethodID)},
+		"struct_payment_method": {fmt.Sprintf(`{"id":%s}`, paymentMethodID)},
 	}
 
 	params := make(map[string]string)
@@ -95,6 +95,7 @@ func sendGetRequest(resyToken config.ResyKeys, baseURL string, queryParams url.V
 }
 
 func sendPostRequest(resyKeys config.ResyKeys, baseURL string, queryParams map[string]string) (string, error) {
+	fmt.Println("Sending Post Request from BookRes")
 	url := fmt.Sprintf("https://%s", baseURL)
 
 	post := stringifyQueryParams(queryParams)
