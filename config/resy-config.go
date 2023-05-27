@@ -31,12 +31,15 @@ var SnipeTimee = SnipeTime{Hours: 0, Minutes: 0}
 var tableType = "Dining Room"
 var ResTimeTypes = []ReservationTimeType{
     NewReservationTimeType("19:00:00", nil),
+    NewReservationTimeType("19:15:00", nil),
+    NewReservationTimeType("19:30:00", nil),
+    NewReservationTimeType("18:45:00", nil),
+    NewReservationTimeType("18:30:00", nil),
     NewReservationTimeType("18:30:00", &tableType),
 }
 var ReservationDetailss = ReservationDetails{
-    Date:         "2023-06-02",
+    Date:         "2023-05-30",
     PartySize:    2,
     VenueId:      466,
     ResTimeTypes: ResTimeTypes,
 }
-

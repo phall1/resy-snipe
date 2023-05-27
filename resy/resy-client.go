@@ -84,6 +84,7 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
 
     for _, r := range resTimeTypes {
         tableTypeMap, ok := reservations[r.ReservationTime]
+        fmt.Println(ok)
         if !ok {
             continue
         }
@@ -103,6 +104,8 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
             }
         }
     }
+
+    fmt.Println("No Hits")
 
     if time.Now().UnixNano()/int64(time.Millisecond)-start >= millisToRetry {
         return "", errors.New(fmt.Sprintf("couldNotFindResMsgFmt %s %d", date, partySize))
@@ -156,6 +159,7 @@ func (rc *ResyClient) BookReservation(paymentMethodID string, bookToken string) 
 
     var resyToken string
     resyToken = resp
+    fmt.Println(resyToken)
     // respBytes := []byte(resp)
     // if err := json.Unmarshal(respBytes, &resyToken); err != nil {
     //     fmt.Println("err")

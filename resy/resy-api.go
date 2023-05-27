@@ -98,8 +98,8 @@ func sendPostRequest(resyKeys config.ResyKeys, baseURL string, queryParams map[s
 
 	post := stringifyQueryParams(queryParams)
 
-	fmt.Printf("URL Request: %s\n", url)
-	fmt.Printf("Post Params: %s\n", post)
+	// fmt.Printf("URL Request: %s\n", url)
+	// fmt.Printf("Post Params: %s\n", post)
 
 	req, err := http.NewRequest("POST", url, strings.NewReader(post))
 	if err != nil {

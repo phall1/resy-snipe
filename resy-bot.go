@@ -9,7 +9,9 @@ import (
 
 func main() {
     // Set the time when you want the program to execute
-    scheduledTime := time.Date(2023, time.May, 26, config.SnipeTimee.Hours, config.SnipeTimee.Minutes, 0, 0, time.Local)
+	// Add today's date +1 for config.SnipeTimee.Hours, config.SnipeTimee.Minutes := 0, 0
+	// Else do the same day
+    scheduledTime := time.Date(2023, time.May, 27, config.SnipeTimee.Hours, config.SnipeTimee.Minutes, 0, 0, time.Local)
 
     // Calculate the duration until the scheduled time
     duration := scheduledTime.Sub(time.Now())
@@ -27,7 +29,7 @@ func main() {
     // Wait until the scheduled time
     time.Sleep(duration)
 
-	resyBookingWorkflow.Run(100000)
+	resyBookingWorkflow.Run(2000)
 
     // Execute the program
     fmt.Println("Program executed at", scheduledTime)
