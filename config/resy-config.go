@@ -38,7 +38,7 @@ var ResTimeTypes = []ReservationTimeType{
     NewReservationTimeType("18:30:00", &tableType),
 }
 var ReservationDetailss = ReservationDetails{
-    Date:         "2023-05-30",
+    Date:         "2023-06-04",
     PartySize:    2,
     VenueId:      466,
     ResTimeTypes: ResTimeTypes,

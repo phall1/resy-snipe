@@ -84,7 +84,7 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
 
     for _, r := range resTimeTypes {
         tableTypeMap, ok := reservations[r.ReservationTime]
-        fmt.Println(ok)
+        // fmt.Println(ok)
         if !ok {
             continue
         }
