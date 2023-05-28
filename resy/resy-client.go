@@ -25,6 +25,23 @@ type BookingDetails struct {
 	BookToken       string
 }
 
+// Define a struct that matches the structure of the JSON data
+type Response struct {
+    Results struct {
+        Venues []struct {
+            Slots []struct {
+                Config   struct {
+                    Type  string `json:"type"`
+                    Token string `json:"token"`
+                } `json:"config"`
+                Date struct {
+                    Start string `json:"start"`
+                } `json:"date"`
+            } `json:"slots"`
+        } `json:"venues"`
+    } `json:"results"`
+}
+
 func NewResyClient(resyApi ResyAPI) *ResyClient {
     return &ResyClient{resyApi: resyApi}
 }
@@ -45,43 +62,34 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
 
     // Create variables to store collected reservation information
     var reservations = make(ReservationMap)
-    var extractedValues map[string]interface{}
+    // var extractedValues map[string]interface{}
 
-    // Convert `resp` (response from api.GetReservations) to a byte string then to a map of cascading maps
-    respBytes := []byte(resp)
-    err = json.Unmarshal(respBytes, &extractedValues)
+    // Unmarshal the JSON into the structured Go type
+    var extractedValues Response
+    err = json.Unmarshal([]byte(resp), &extractedValues)
     if err != nil {
         return "", err
     }
 
-    // Accessing values
-    // query := extractedValues["query"].(map[string]interface{})
-    // day := query["day"].(string)
-    results := extractedValues["results"].(map[string]interface{})
-    venues := results["venues"].([]interface{})
-    for _, v := range venues {
-        venue := v.(map[string]interface{})
-        slots := venue["slots"].([]interface{})
-        for _, s := range slots {
-            slot := s.(map[string]interface{})
-            config := slot["config"].(map[string]interface{})
-            start_date := slot["date"].(map[string]interface{})
-            start := strings.Split(start_date["start"].(string), " ")[1]
-            table_type := config["type"].(string)
-            config_id := config["token"].(string)
+    // Access the extracted values
+    for _, venue := range extractedValues.Results.Venues {
+        for _, slot := range venue.Slots {
+            start := strings.Split(slot.Date.Start, " ")[1]
+            tableType := slot.Config.Type
+            configID := slot.Config.Token
+
             if _, ok := reservations[start]; !ok {
-                reservations[start] = TableTypeMap {
-                    table_type: config_id,
+                reservations[start] = TableTypeMap{
+                    tableType: configID,
                 }
             } else {
-                reservations[start][table_type] = config_id
+                reservations[start][tableType] = configID
             }
         }
     }
-
     // Now we have the reservation map
+    
     // Now find a matching reservation
-
     for _, r := range resTimeTypes {
         tableTypeMap, ok := reservations[r.ReservationTime]
         // fmt.Println(ok)
