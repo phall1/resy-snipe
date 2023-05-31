@@ -31,15 +31,18 @@ var SnipeTimee = SnipeTime{Hours: 0, Minutes: 0}
 var tableType = "Dining Room"
 var ResTimeTypes = []ReservationTimeType{
     NewReservationTimeType("18:45:00", nil),
-    NewReservationTimeType("19:00:00", nil),
+    NewReservationTimeType("12:00:00", nil),
     NewReservationTimeType("19:15:00", nil),
     NewReservationTimeType("19:30:00", nil),
     NewReservationTimeType("18:30:00", nil),
     NewReservationTimeType("18:30:00", &tableType),
 }
+
+// DeadRabbit: 38660
+// Rubirosa: 466
 var ReservationDetailss = ReservationDetails{
     Date:         "2023-06-04",
     PartySize:    2,
-    VenueId:      466,
+    VenueId:      38660,
     ResTimeTypes: ResTimeTypes,
 }
