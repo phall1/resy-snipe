@@ -88,7 +88,7 @@ func (r *ResyBookingWorkflow) snipeConfigId(configId string, err error) (string,
     if configId != "" {
         bookingDetails, err := r.resyClient.getReservationDetails(configId, r.resDetails.Date, r.resDetails.PartySize)
         if err != nil {
-            fmt.Println(err)
+            fmt.Printf("getReservationDetails error: %s", err)
             return "", err
         }
         resyToken, resyTokenErr = r.resyClient.BookReservation(bookingDetails.PaymentMethodID, bookingDetails.BookToken)

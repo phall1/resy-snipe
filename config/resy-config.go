@@ -29,11 +29,14 @@ func NewReservationTimeType(reservationTime string, tableType *string) Reservati
 var ResyKeyss = ResyKeys{ApiKey: os.Getenv("RESY_API_KEY"), AuthToken: os.Getenv("RESY_API_KEY")}
 var SnipeTimee = SnipeTime{Hours: 0, Minutes: 0}
 // var tableType = "Dining Room"
-var tableType = "Taproom Table"
+// var tableType = "Taproom Table"
 var ResTimeTypes = []ReservationTimeType{
-    NewReservationTimeType("12:15:00", &tableType),
-    NewReservationTimeType("12:00:00", nil),
-    NewReservationTimeType("12:30:00", nil),
+    NewReservationTimeType("11:00:00", nil),
+    NewReservationTimeType("11:15:00", nil),
+    NewReservationTimeType("11:30:00", nil),
+    // NewReservationTimeType("12:15:00", &tableType),
+    // NewReservationTimeType("16:00:00", nil),
+    // NewReservationTimeType("12:30:00", nil),
     // NewReservationTimeType("19:15:00", nil),
     // NewReservationTimeType("19:30:00", nil),
     // NewReservationTimeType("18:30:00", nil),
@@ -42,6 +45,7 @@ var ResTimeTypes = []ReservationTimeType{
 
 // DeadRabbit: 38660
 // Rubirosa: 466
+// Red Pearl: 69820
 var ReservationDetailss = ReservationDetails{
     Date:         "2023-06-04",
     PartySize:    2,
