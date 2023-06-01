@@ -8,6 +8,7 @@ import (
     "strconv"
     "strings"    
     "encoding/json"
+    "container/list"
     "resy-snipe/config"
 )
 
@@ -46,11 +47,20 @@ func NewResyClient(resyApi ResyAPI) *ResyClient {
     return &ResyClient{resyApi: resyApi}
 }
 
-func (rc *ResyClient) findReservations(date string, partySize int, venueId int, resTimeTypes []config.ReservationTimeType, millisToRetry int64) (ReservationMap, error) {
+func getMapFirstKey(tableTypeMap TableTypeMap) (string) {
+    var firstKey string
+    for key, _ := range tableTypeMap {
+        firstKey = key
+        break
+    }
+    return firstKey
+}
+
+func (rc *ResyClient) findReservations(date string, partySize int, venueId int, resTimeTypes []config.ReservationTimeType, millisToRetry int64) (*list.List, error) {
     return rc.retryFindReservations(date, partySize, venueId, resTimeTypes, millisToRetry, time.Now().UnixNano()/int64(time.Millisecond))
 }
 
-func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId int, resTimeTypes []config.ReservationTimeType, millisToRetry int64, start int64) (ReservationMap, error) {
+func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId int, resTimeTypes []config.ReservationTimeType, millisToRetry int64, start int64) (*list.List, error) {
     if len(resTimeTypes) == 0 {
         return nil, errors.New("noReservationTimeTypesMsg")
     }
@@ -87,13 +97,8 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
             }
         }
     }
-
-    // fmt.Println(reservations)
-    // fmt.Println(resTimeTypes[0].ReservationTime)
     // Now we have the reservation map
-    
-    var foundReservations = make(ReservationMap)
-
+    queue := list.New()
     // Now find a matching reservation
     for _, r := range resTimeTypes {
         tableTypeMap, ok := reservations[r.ReservationTime]
@@ -101,24 +106,31 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
             continue
         }
 
-        fmt.Println("tableTypeMap")
-        fmt.Println(tableTypeMap)
-
-        if _, ok := foundReservations[r.ReservationTime]; !ok {
-            foundReservations[r.ReservationTime] = TableTypeMap{
-                *r.TableType: tableTypeMap[*r.TableType],
-            }
+        if r.TableType != nil {
+            queue.PushBack(tableTypeMap[*r.TableType])
+            // return tableTypeMap[*r.TableType], nil
         } else {
-            foundReservations[r.ReservationTime][*r.TableType] = tableTypeMap[*r.TableType]
+            if ok {
+                firstKey := getMapFirstKey(tableTypeMap)
+                queue.PushBack(tableTypeMap[firstKey])
+                // return tableTypeMap[firstKey], nil
+            }
         }
     }
 
-    if len(foundReservations) > 0 {
-        return foundReservations, nil
+    
+    if queue.Len() > 0 {
+        return queue, nil
     } else {
         fmt.Println("No Hits")
-        return nil, nil
     }
+
+    if time.Now().UnixNano()/int64(time.Millisecond)-start >= millisToRetry {
+        return nil, errors.New(fmt.Sprintf("couldNotFindResMsgFmt %s %d", date, partySize))
+    }
+
+    time.Sleep(time.Duration(retryIntervalMs) * time.Millisecond)
+    return rc.retryFindReservations(date, partySize, venueId, resTimeTypes, millisToRetry, start)
 }
 
 // Get details of the reservation

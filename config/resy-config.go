@@ -33,10 +33,11 @@ var tableType = "Taproom Table"
 var ResTimeTypes = []ReservationTimeType{
     NewReservationTimeType("12:15:00", &tableType),
     NewReservationTimeType("12:00:00", nil),
-    NewReservationTimeType("19:15:00", nil),
-    NewReservationTimeType("19:30:00", nil),
-    NewReservationTimeType("18:30:00", nil),
-    NewReservationTimeType("18:30:00", &tableType),
+    NewReservationTimeType("12:30:00", nil),
+    // NewReservationTimeType("19:15:00", nil),
+    // NewReservationTimeType("19:30:00", nil),
+    // NewReservationTimeType("18:30:00", nil),
+    // NewReservationTimeType("18:30:00", &tableType),
 }
 
 // DeadRabbit: 38660
