@@ -28,9 +28,10 @@ func NewReservationTimeType(reservationTime string, tableType *string) Reservati
 
 var ResyKeyss = ResyKeys{ApiKey: os.Getenv("RESY_API_KEY"), AuthToken: os.Getenv("RESY_API_KEY")}
 var SnipeTimee = SnipeTime{Hours: 0, Minutes: 0}
-var tableType = "Dining Room"
+// var tableType = "Dining Room"
+var tableType = "Taproom Table"
 var ResTimeTypes = []ReservationTimeType{
-    NewReservationTimeType("18:45:00", nil),
+    NewReservationTimeType("12:15:00", &tableType),
     NewReservationTimeType("12:00:00", nil),
     NewReservationTimeType("19:15:00", nil),
     NewReservationTimeType("19:30:00", nil),

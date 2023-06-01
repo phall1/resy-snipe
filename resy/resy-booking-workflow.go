@@ -1,7 +1,7 @@
 package resy
 
 import (
-    // "os"
+    "os"
     "fmt"
     "log"
     "time"
@@ -28,15 +28,21 @@ func (r *ResyBookingWorkflow) runnable(millisToRetry time.Duration, dateTimeStar
     log.Println("Taking the shot... ︻デ═一 *")
 
     // configId, err := r.resyClient.findReservations(r.resDetails.Date, r.resDetails.PartySize, r.resDetails.VenueId, r.resDetails.ResTimeTypes, 2)
-    configId, err := r.resyClient.findReservations(r.resDetails.Date, r.resDetails.PartySize, r.resDetails.VenueId, r.resDetails.ResTimeTypes, 2)
+    // var reservations = make(ReservationMap)
+    reservations, err := r.resyClient.findReservations(r.resDetails.Date, r.resDetails.PartySize, r.resDetails.VenueId, r.resDetails.ResTimeTypes, 2)
     if err != nil {
         return "", err
     }
+
+    fmt.Println(reservations)
+    os.Exit(24)
 
     // Return a list of configs? 
     // return a list of configs that exist in the desired time list then use go routines to request them all? 
     // Use Go routines to analyze if they exist instead? What is the best way to implement concurrency 
     // Where do I trigger for it to try the second option? 
+    
+    var configId string
 
     var resyToken string
     var resyTokenErr error

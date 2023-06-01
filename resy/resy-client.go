@@ -101,12 +101,15 @@ func (rc *ResyClient) retryFindReservations(date string, partySize int, venueId 
             continue
         }
 
+        fmt.Println("tableTypeMap")
+        fmt.Println(tableTypeMap)
+
         if _, ok := foundReservations[r.ReservationTime]; !ok {
             foundReservations[r.ReservationTime] = TableTypeMap{
                 *r.TableType: tableTypeMap[*r.TableType],
             }
         } else {
-            reservations[r.ReservationTime][*r.TableType] = tableTypeMap[*r.TableType]
+            foundReservations[r.ReservationTime][*r.TableType] = tableTypeMap[*r.TableType]
         }
     }
 
