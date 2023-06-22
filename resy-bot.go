@@ -11,7 +11,7 @@ func main() {
     // Set the time when you want the program to execute
 	// Add today's date +1 for config.SnipeTimee.Hours, config.SnipeTimee.Minutes := 0, 0
 	// Else do the same day
-    scheduledTime := time.Date(2023, time.May, 28, config.SnipeTimee.Hours, config.SnipeTimee.Minutes, 0, 0, time.Local)
+    scheduledTime := time.Date(2023, time.June, 23, config.SnipeTimee.Hours, config.SnipeTimee.Minutes, 0, 0, time.Local)
 
     // Calculate the duration until the scheduled time
     duration := scheduledTime.Sub(time.Now())
