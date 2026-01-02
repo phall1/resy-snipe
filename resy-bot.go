@@ -1,20 +1,20 @@
 package main
 
 import (
-    "fmt"
-    "time"
-	"resy-snipe/resy"
+	"fmt"
 	"resy-snipe/config"
+	"resy-snipe/resy"
+	"time"
 )
 
 func main() {
-    // Set the time when you want the program to execute
+	// Set the time when you want the program to execute
 	// Add today's date +1 for config.SnipeTimee.Hours, config.SnipeTimee.Minutes := 0, 0
 	// Else do the same day
-    scheduledTime := time.Date(2023, time.May, 27, config.SnipeTimee.Hours, config.SnipeTimee.Minutes, 0, 0, time.Local)
+	scheduledTime := time.Date(2026, time.January, 2, config.SnipeTimee.Hours, config.SnipeTimee.Minutes, 0, 0, time.Local)
 
-    // Calculate the duration until the scheduled time
-    duration := scheduledTime.Sub(time.Now())
+	// Calculate the duration until the scheduled time
+	duration := scheduledTime.Sub(time.Now())
 
 	resyKeys, snipeTime, reservationDetails := config.ResyKeyss, config.SnipeTimee, config.ReservationDetailss
 
@@ -22,15 +22,15 @@ func main() {
 	resyClient := resy.NewResyClient(*resyApi)
 	resyBookingWorkflow := resy.NewResyBookingWorkflow(*resyClient, reservationDetails)
 
-	fmt.Println("Workflow Configured")
+	fmt.Println("Calibrating...")
 	fmt.Println(snipeTime)
 	fmt.Println("Sleeping for ", duration)
 
-    // Wait until the scheduled time
-    time.Sleep(duration)
+	// Wait until the scheduled time
+	time.Sleep(duration)
 
-	resyBookingWorkflow.Run(2000)
+	resyBookingWorkflow.Run(1000)
 
-    // Execute the program
-    fmt.Println("Program executed at", scheduledTime)
+	// Execute the program
+	fmt.Println("Program executed at", scheduledTime)
 }
