@@ -11,6 +11,9 @@ Important note (ethics / ToS): This tool automates interactions with Resy endpoi
 - Reservation discovery loop with a short retry interval (10ms between attempts).
 - Concurrent booking attempts: if multiple candidate config tokens are found, the workflow tries booking them concurrently.
 
+## Demo
+![Demo](demo.gif)
+
 ## Requirements
 - Go 1.20+
 - A Resy account with valid tokens:
