@@ -3,7 +3,6 @@ package resy
 import (
 	// "os"
 	"fmt"
-	"log"
 	"resy-snipe/config"
 	"sync"
 	"time"
@@ -26,7 +25,7 @@ func (r *ResyBookingWorkflow) Run(millisToRetry time.Duration) (string, error) {
 }
 
 func (r *ResyBookingWorkflow) runnable(millisToRetry time.Duration, dateTimeStart int64) (string, error) {
-	log.Println("Taking the shot... ︻デ═一 *")
+	fmt.Printf("\nTaking the shot... ︻デ═一 *\n")
 
 	resQueue, err := r.resyClient.findReservations(r.resDetails.Date, r.resDetails.PartySize, r.resDetails.VenueId, r.resDetails.ResTimeTypes, 2)
 	if err != nil {

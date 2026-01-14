@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 type ResyKeys struct {
 	ApiKey    string
@@ -30,17 +33,10 @@ func NewReservationTimeType(reservationTime string, tableType *string) Reservati
 
 var ResyKeyss = ResyKeys{ApiKey: os.Getenv("RESY_API_KEY"), AuthToken: os.Getenv("RESY_AUTH_TOKEN")}
 
-var SnipeTimee = SnipeTime{Hours: 14, Minutes: 05}
-
-var tableType = "Dining Room"
-
-// var tableType = "Taproom Table"
-// var tableType = "High Top"
-// var tableType = "TAP EXT TABLE"
-// var tableType = "Parlor"
+var SnipeTimee = SnipeTime{Hours: 0, Minutes: 0}
 
 var ResTimeTypes = []ReservationTimeType{
-	NewReservationTimeType("18:30:00", nil),
+	NewReservationTimeType("18:45:00", nil),
 }
 
 // Venue IDs (Resy)
@@ -57,9 +53,10 @@ const (
 	HOWOO      int = 86696
 )
 
+var zone, _ = time.LoadLocation("America/New_York")
 var ReservationDetailss = ReservationDetails{
-	Date:         "2026-01-06",
+	Date:         time.Now().In(zone).AddDate(0, 0, 7).Format("2006-01-02"),
 	PartySize:    2,
-	VenueId:      HOWOO,
+	VenueId:      DeadRabbit,
 	ResTimeTypes: ResTimeTypes,
 }

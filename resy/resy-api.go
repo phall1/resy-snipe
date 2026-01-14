@@ -65,7 +65,19 @@ func (api *ResyAPI) PostReservation(paymentMethodID string, bookToken string) (s
 func sendGetRequest(resyKeys config.ResyKeys, baseURL string, queryParams url.Values) (string, error) {
 	url := fmt.Sprintf("https://%s?%s", baseURL, queryParams.Encode())
 
-	fmt.Println("-- URL:", url)
+	if queryParams["config_id"] != nil {
+		vals := queryParams["config_id"]
+		if len(vals) == 0 {
+			fmt.Println("config_id nil")
+		}
+		configID := vals[0] // take first value
+
+		parts := strings.Split(configID, "/")
+		seatingType := parts[len(parts)-1]
+		fmt.Printf("---- Day %s - Seating Preference: %s\n", queryParams["day"], seatingType)
+	} else {
+		fmt.Printf("---- Venue %s - Party Size: %s\n", queryParams["venue_id"], queryParams["party_size"])
+	}
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
@@ -95,8 +107,8 @@ func sendGetRequest(resyKeys config.ResyKeys, baseURL string, queryParams url.Va
 			fmt.Println("Error reading response body: ", err)
 		}
 		fmt.Println("failed to book reservation: ", resp.Status)
-		fmt.Println("failed to book reservation: ", resp.Body)
-		fmt.Println("failed to book reservation: ", respBody)
+		fmt.Println("failed to book reservation: ", &resp.Body)
+		fmt.Println("failed to book reservation: ", string(respBody))
 		return "", fmt.Errorf("failed to book reservation: %s", resp.Status)
 	}
 
@@ -137,14 +149,14 @@ func sendPostRequest(resyKeys config.ResyKeys, baseURL string, queryParams map[s
 
 	if resp.StatusCode != http.StatusCreated {
 		b, _ := io.ReadAll(resp.Body)
-		fmt.Println("request failed:", url)
-		fmt.Println("status:", resp.Status)
-		fmt.Println("content-type:", resp.Header.Get("Content-Type"))
-		fmt.Println("content-encoding:", resp.Header.Get("Content-Encoding"))
-		fmt.Println("x-request-id:", resp.Header.Get("x-request-id"))
-		fmt.Println("body-len:", len(b))
-		fmt.Println("body:", string(b))
-		return "", fmt.Errorf("request failed: %s", resp.Status)
+		// fmt.Println("request failed:", url)
+		// fmt.Println("status:", resp.Status)
+		// fmt.Println("content-type:", resp.Header.Get("Content-Type"))
+		// fmt.Println("content-encoding:", resp.Header.Get("Content-Encoding"))
+		// fmt.Println("x-request-id:", resp.Header.Get("x-request-id"))
+		// fmt.Println("body-len:", len(b))
+		// fmt.Println("body:", string(b))
+		return "", fmt.Errorf("request failed: %s :: %s", resp.Status, string(b))
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)

@@ -173,9 +173,8 @@ func (rc *ResyClient) BookReservation(paymentMethodID string, bookToken string) 
 	var resyToken string
 	resyToken = resp
 
-	fmt.Println("Headshot!")
+	fmt.Println("Headshot -- successfully sniped reservation!")
 	fmt.Println("(҂‾ ▵‾)︻デ═一 (× _ ×#")
-	fmt.Println("Successfully sniped reservation")
 
 	return resyToken, nil
 }
