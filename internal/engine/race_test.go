@@ -3,7 +3,6 @@ package engine_test
 import (
 	"context"
 	"errors"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -196,7 +195,6 @@ func TestRunBookingRace_FirstSuccessWins(t *testing.T) {
 	eng := newRaceFixture(t, pre)
 	state := awaitingState(t, eng)
 
-	before := runtime.NumGoroutine()
 	if err := eng.RunBookingRace(context.Background(), state, fakeSession(t)); err != nil {
 		t.Fatalf("RunBookingRace: %v", err)
 	}
@@ -217,13 +215,9 @@ func TestRunBookingRace_FirstSuccessWins(t *testing.T) {
 	if len(pTokens) == 0 || pTokens[0] != "tok-B" {
 		t.Errorf("first PrepareSlot was not the highest-priority: %v", pTokens)
 	}
-
-	// Wait briefly for any in-flight goroutines to fully exit.
-	time.Sleep(40 * time.Millisecond)
-	after := runtime.NumGoroutine()
-	if after > before+1 {
-		t.Errorf("goroutine leak: before=%d after=%d", before, after)
-	}
+	// Goroutine-leak verification lives in TestRunNoGoroutineLeak
+	// (non-parallel) where a NumGoroutine snapshot isn't biased by
+	// sibling tests' background work.
 }
 
 func TestRunBookingRace_FallthroughOnPrepareFailure(t *testing.T) {

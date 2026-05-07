@@ -3,7 +3,6 @@ package engine_test
 import (
 	"context"
 	"errors"
-	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -40,7 +39,6 @@ func TestShutdownCancelsPrepareLoopWithin5s(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	before := runtime.NumGoroutine()
 	done := make(chan error, 1)
 	go func() {
 		done <- eng.RunBookingRace(ctx, state, fakeSession(t))
@@ -58,13 +56,10 @@ func TestShutdownCancelsPrepareLoopWithin5s(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("RunBookingRace did not return within 5s of cancel")
 	}
-
-	// Allow goroutines to fully exit.
-	time.Sleep(60 * time.Millisecond)
-	after := runtime.NumGoroutine()
-	if after > before+2 {
-		t.Errorf("goroutine leak after shutdown: before=%d after=%d", before, after)
-	}
+	// RunBookingRace's wg.Wait() guarantees no goroutine outlives it;
+	// numerical goroutine-count assertions here are flaky under
+	// parallel tests and the property is covered by run_test's
+	// dedicated non-parallel TestRunNoGoroutineLeak.
 }
 
 // TestInflightConfirmIsNotCanceledByParentCtx verifies the
