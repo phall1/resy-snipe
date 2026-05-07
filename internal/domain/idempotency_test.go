@@ -20,7 +20,7 @@ func TestEventTypeStringsAreStable(t *testing.T) {
 		domain.EventBookAttempted: "book_attempted",
 		domain.EventBooked:        "booked",
 		domain.EventFailed:        "failed",
-		domain.EventCancelled:     "cancelled",
+		domain.EventCanceled:      "canceled",
 		domain.EventExpired:       "expired",
 	}
 	for et, str := range want {
@@ -47,6 +47,9 @@ func TestEventCarriesTypedAttrs(t *testing.T) {
 	}
 	if e.Type != domain.EventBooked {
 		t.Fatalf("Type lost: %s", e.Type)
+	}
+	if !e.At.Equal(now) {
+		t.Fatalf("At lost: got %v want %v", e.At, now)
 	}
 	if len(e.Attrs) != 3 {
 		t.Fatalf("attrs lost: %v", e.Attrs)

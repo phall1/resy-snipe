@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // Status enumerates the lifecycle states of a SnipeState. The set is
 // closed; new states require corresponding additions to allTransitions
@@ -16,7 +19,7 @@ const (
 	StatusBooking
 	StatusBooked
 	StatusFailed
-	StatusCancelled
+	StatusCanceled
 	StatusExpired
 )
 
@@ -33,7 +36,7 @@ func AllStatuses() []Status {
 		StatusBooking,
 		StatusBooked,
 		StatusFailed,
-		StatusCancelled,
+		StatusCanceled,
 		StatusExpired,
 	}
 }
@@ -41,7 +44,7 @@ func AllStatuses() []Status {
 // IsTerminal reports whether s admits no outgoing transitions.
 func (s Status) IsTerminal() bool {
 	switch s {
-	case StatusBooked, StatusFailed, StatusCancelled, StatusExpired:
+	case StatusBooked, StatusFailed, StatusCanceled, StatusExpired:
 		return true
 	default:
 		return false
@@ -67,8 +70,8 @@ func (s Status) String() string {
 		return "booked"
 	case StatusFailed:
 		return "failed"
-	case StatusCancelled:
-		return "cancelled"
+	case StatusCanceled:
+		return "canceled"
 	case StatusExpired:
 		return "expired"
 	default:
@@ -84,45 +87,45 @@ var allowedTransitions = map[Status]map[Status]struct{}{
 	StatusSubmitted: {
 		StatusScheduled:   {},
 		StatusDiscovering: {},
-		StatusCancelled:   {},
+		StatusCanceled:    {},
 		StatusFailed:      {},
 	},
 	StatusScheduled: {
 		StatusAwaiting:    {},
 		StatusDiscovering: {},
-		StatusCancelled:   {},
+		StatusCanceled:    {},
 		StatusFailed:      {},
 		StatusExpired:     {},
 	},
 	StatusDiscovering: {
-		StatusAwaiting:  {},
-		StatusCancelled: {},
-		StatusFailed:    {},
-		StatusExpired:   {},
+		StatusAwaiting: {},
+		StatusCanceled: {},
+		StatusFailed:   {},
+		StatusExpired:  {},
 	},
 	StatusAwaiting: {
-		StatusFinding:   {},
-		StatusCancelled: {},
-		StatusFailed:    {},
-		StatusExpired:   {},
+		StatusFinding:  {},
+		StatusCanceled: {},
+		StatusFailed:   {},
+		StatusExpired:  {},
 	},
 	StatusFinding: {
-		StatusBooking:   {},
-		StatusAwaiting:  {},
-		StatusCancelled: {},
-		StatusFailed:    {},
-		StatusExpired:   {},
+		StatusBooking:  {},
+		StatusAwaiting: {},
+		StatusCanceled: {},
+		StatusFailed:   {},
+		StatusExpired:  {},
 	},
 	StatusBooking: {
-		StatusBooked:    {},
-		StatusFinding:   {},
-		StatusCancelled: {},
-		StatusFailed:    {},
+		StatusBooked:   {},
+		StatusFinding:  {},
+		StatusCanceled: {},
+		StatusFailed:   {},
 	},
-	StatusBooked:    {},
-	StatusFailed:    {},
-	StatusCancelled: {},
-	StatusExpired:   {},
+	StatusBooked:   {},
+	StatusFailed:   {},
+	StatusCanceled: {},
+	StatusExpired:  {},
 }
 
 // CanTransition reports whether moving from -> to is legal under the
@@ -171,12 +174,7 @@ func init() {
 }
 
 func validStatus(s Status, all []Status) bool {
-	for _, x := range all {
-		if x == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(all, s)
 }
 
 // InvalidTransitionError is returned by SnipeState.Transition when the

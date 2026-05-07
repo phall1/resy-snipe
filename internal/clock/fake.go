@@ -57,10 +57,7 @@ func (f *Fake) Sleep(d time.Duration) {
 func (f *Fake) Advance(d time.Duration) {
 	f.mu.Lock()
 	target := f.now.Add(d)
-	for {
-		if len(f.pending) == 0 || f.pending[0].deadline.After(target) {
-			break
-		}
+	for len(f.pending) > 0 && !f.pending[0].deadline.After(target) {
 		e := f.pending[0]
 		f.pending = f.pending[1:]
 		if e.stopped {

@@ -12,12 +12,12 @@ import (
 // pure; this struct exists only at the persistence boundary and may
 // evolve independently of domain.Intent (with a migration if needed).
 type intentJSON struct {
-	User      domain.UserID    `json:"user"`
-	Venue     domain.VenueRef  `json:"venue"`
-	Date      string           `json:"date"`
-	PartySize int              `json:"party_size"`
-	SlotPrefs []slotPrefJSON   `json:"slot_prefs,omitempty"`
-	Release   *releaseJSON     `json:"release,omitempty"`
+	User      domain.UserID   `json:"user"`
+	Venue     domain.VenueRef `json:"venue"`
+	Date      string          `json:"date"`
+	PartySize int             `json:"party_size"`
+	SlotPrefs []slotPrefJSON  `json:"slot_prefs,omitempty"`
+	Release   *releaseJSON    `json:"release,omitempty"`
 }
 
 type slotPrefJSON struct {
@@ -30,10 +30,10 @@ type slotPrefJSON struct {
 // time fields is populated for any given Kind.
 type releaseJSON struct {
 	Kind       string    `json:"kind"`
-	At         time.Time `json:"at,omitempty"`
-	ProbeFrom  time.Time `json:"probe_from,omitempty"`
-	ProbeUntil time.Time `json:"probe_until,omitempty"`
-	Until      time.Time `json:"until,omitempty"`
+	At         time.Time `json:"at,omitzero"`
+	ProbeFrom  time.Time `json:"probe_from,omitzero"`
+	ProbeUntil time.Time `json:"probe_until,omitzero"`
+	Until      time.Time `json:"until,omitzero"`
 }
 
 const (
@@ -81,9 +81,9 @@ func UnmarshalIntent(data []byte) (domain.Intent, error) {
 		PartySize: raw.PartySize,
 	}
 	for _, p := range raw.SlotPrefs {
-		w, err := domain.ParseWallTime(p.Time)
-		if err != nil {
-			return domain.Intent{}, fmt.Errorf("UnmarshalIntent slot time %q: %w", p.Time, err)
+		w, parseErr := domain.ParseWallTime(p.Time)
+		if parseErr != nil {
+			return domain.Intent{}, fmt.Errorf("UnmarshalIntent slot time %q: %w", p.Time, parseErr)
 		}
 		out.SlotPrefs = append(out.SlotPrefs, domain.SlotPreference{
 			Time:      w,
@@ -101,7 +101,9 @@ func UnmarshalIntent(data []byte) (domain.Intent, error) {
 func encodeRelease(r domain.ReleaseStrategy) (*releaseJSON, error) {
 	switch v := r.(type) {
 	case nil:
-		return nil, nil
+		// nil release is a valid absence — Intent.Release is optional.
+		return nil, nil //nolint:nilnil // intentional optional-value sentinel
+
 	case domain.ExplicitRelease:
 		return &releaseJSON{Kind: releaseKindExplicit, At: v.At}, nil
 	case domain.DiscoveredRelease:
@@ -119,7 +121,8 @@ func encodeRelease(r domain.ReleaseStrategy) (*releaseJSON, error) {
 
 func decodeRelease(j *releaseJSON) (domain.ReleaseStrategy, error) {
 	if j == nil {
-		return nil, nil
+		// Absent release column round-trips to a nil ReleaseStrategy.
+		return nil, nil //nolint:nilnil // intentional optional-value sentinel
 	}
 	switch j.Kind {
 	case releaseKindExplicit:
@@ -152,7 +155,8 @@ func MarshalResult(r *domain.Result) ([]byte, error) {
 
 func UnmarshalResult(data []byte) (*domain.Result, error) {
 	if len(data) == 0 {
-		return nil, nil
+		// Empty bytes encode "no result yet" — a snipe pre-Booked.
+		return nil, nil //nolint:nilnil // intentional optional-value sentinel
 	}
 	var raw resultJSON
 	if err := json.Unmarshal(data, &raw); err != nil {

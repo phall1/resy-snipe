@@ -246,7 +246,7 @@ func TestSessionsHappyPath(t *testing.T) {
 	// Create the user first to satisfy the FK.
 	db := openMigrated(t)
 	_ = db // already opened by newStore via openMigrated
-	if _, err := storeUser(s, "u1"); err != nil {
+	if err := storeUser(s, "u1"); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 
@@ -293,7 +293,7 @@ func TestGetSessionExpired(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	ctx := context.Background()
-	if _, err := storeUser(s, "u_exp"); err != nil {
+	if err := storeUser(s, "u_exp"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -328,7 +328,7 @@ func TestDeleteSession(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	ctx := context.Background()
-	if _, err := storeUser(s, "u_del"); err != nil {
+	if err := storeUser(s, "u_del"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -443,11 +443,8 @@ func TestObservedNotFound(t *testing.T) {
 // storeUser writes a minimal users row directly via the DB accessor
 // so session FK constraints are satisfied. Users management isn't
 // surfaced by the Store interface in Phase 1.
-func storeUser(s *store.SQLiteStore, id string) (string, error) {
+func storeUser(s *store.SQLiteStore, id string) error {
 	_, err := s.DB().ExecContext(context.Background(),
 		`INSERT INTO users (id) VALUES (?)`, id)
-	if err != nil {
-		return "", err
-	}
-	return id, nil
+	return err
 }

@@ -84,7 +84,6 @@ func TestFakeAfterFuncFiresInRegistrationOrder(t *testing.T) {
 	var mu sync.Mutex
 	var got []int
 	for i := 1; i <= 5; i++ {
-		i := i
 		c.AfterFunc(time.Second, func() {
 			mu.Lock()
 			got = append(got, i)

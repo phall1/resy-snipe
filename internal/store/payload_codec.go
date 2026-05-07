@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"resy-snipe/internal/domain"
@@ -37,7 +38,7 @@ type slotPayloadEnvelope struct {
 // store boundary does.
 func MarshalSlotPayload(p domain.SlotPayload) ([]byte, error) {
 	if p == nil {
-		return nil, fmt.Errorf("MarshalSlotPayload: nil payload")
+		return nil, errors.New("MarshalSlotPayload: nil payload")
 	}
 	switch v := p.(type) {
 	case domain.ResySlotPayload:
@@ -68,7 +69,7 @@ func UnmarshalSlotPayload(data []byte) (domain.SlotPayload, error) {
 		}
 		return p, nil
 	case "":
-		return nil, fmt.Errorf("UnmarshalSlotPayload: missing kind discriminator")
+		return nil, errors.New("UnmarshalSlotPayload: missing kind discriminator")
 	default:
 		return nil, fmt.Errorf("UnmarshalSlotPayload: unknown kind %q", env.Kind)
 	}

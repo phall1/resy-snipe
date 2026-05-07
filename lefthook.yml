@@ -1,0 +1,79 @@
+# lefthook config — owns .git/hooks and delegates bd's existing hook
+# duties as commands so a single hook orchestrator runs both quality
+# gates and beads bookkeeping. Install once with:
+#
+#     git config --unset-all --local core.hooksPath || true
+#     lefthook install
+#
+# After install, every commit runs (in parallel) gofmt-check, go vet,
+# golangci-lint, the gates recipe, and `bd hooks run pre-commit`.
+
+pre-commit:
+  parallel: true
+  commands:
+    bd:
+      # Beads auto-export and friends. Skipped silently if bd isn't on
+      # PATH (so contributors without bd can still commit).
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run pre-commit
+        fi
+
+    gofmt:
+      glob: "*.go"
+      run: |
+        out=$(gofmt -s -l {staged_files})
+        if [ -n "$out" ]; then
+          echo "gofmt would rewrite:"
+          echo "$out"
+          echo
+          echo "run 'just fmt' to fix"
+          exit 1
+        fi
+
+    govet:
+      glob: "*.go"
+      run: go vet ./...
+
+    golangci-lint:
+      glob: "*.go"
+      # Run module-wide rather than only on staged files so cross-file
+      # issues (interface drift, unused exports, missing imports) get
+      # caught before they land.
+      run: golangci-lint run ./...
+
+    gates:
+      glob: "*.go"
+      run: just gates
+
+prepare-commit-msg:
+  commands:
+    bd:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run prepare-commit-msg "$@"
+        fi
+
+post-checkout:
+  commands:
+    bd:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run post-checkout "$@"
+        fi
+
+post-merge:
+  commands:
+    bd:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run post-merge "$@"
+        fi
+
+pre-push:
+  commands:
+    bd:
+      run: |
+        if command -v bd >/dev/null 2>&1; then
+          BD_GIT_HOOK=1 bd hooks run pre-push "$@"
+        fi

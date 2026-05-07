@@ -3,7 +3,6 @@ package engine_test
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -50,7 +49,7 @@ func newEngineFixture(t *testing.T) (*engine.Engine, *clock.Fake, store.Store) {
 	}
 	s := store.NewSQLiteStore(db)
 	c := clock.NewFake(time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC))
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.DiscardHandler)
 	return engine.New(s, c, log), c, s
 }
 
@@ -250,7 +249,7 @@ func TestEngineRejectsNilDeps(t *testing.T) {
 			t.Fatal("expected panic on nil store")
 		}
 	}()
-	_ = engine.New(nil, clock.NewReal(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_ = engine.New(nil, clock.NewReal(), slog.New(slog.DiscardHandler))
 }
 
 // wipeSnipeRow forcibly deletes a snipe row so we can exercise the

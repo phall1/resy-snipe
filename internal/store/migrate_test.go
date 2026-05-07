@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"resy-snipe/internal/store"
@@ -66,6 +67,9 @@ func TestMigrateRecordsAppliedVersions(t *testing.T) {
 		}
 		got = append(got, r)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows.Err: %v", err)
+	}
 	if len(got) != 1 || got[0].version != 1 || got[0].name != "initial" {
 		t.Fatalf("schema_migrations rows: %+v", got)
 	}
@@ -75,21 +79,14 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	t.Parallel()
 	db := openMigrated(t)
 	// Already migrated once via openMigrated. Run twice more.
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := store.Migrate(context.Background(), db); err != nil {
 			t.Fatalf("Migrate run %d: %v", i+2, err)
 		}
 	}
-	rows, err := db.QueryContext(context.Background(), `SELECT COUNT(*) FROM schema_migrations`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		t.Fatal("count missing")
-	}
 	var n int
-	if err := rows.Scan(&n); err != nil {
+	if err := db.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 {
@@ -163,14 +160,12 @@ func listTables(t *testing.T, db *sql.DB) []string {
 		}
 		names = append(names, n)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows.Err: %v", err)
+	}
 	return names
 }
 
 func contains(haystack []string, needle string) bool {
-	for _, h := range haystack {
-		if h == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }

@@ -14,7 +14,7 @@ const (
 	EventBookAttempted EventType = "book_attempted"
 	EventBooked        EventType = "booked"
 	EventFailed        EventType = "failed"
-	EventCancelled     EventType = "cancelled"
+	EventCanceled      EventType = "canceled"
 	EventExpired       EventType = "expired"
 )
 
@@ -29,7 +29,7 @@ func AllEventTypes() []EventType {
 		EventBookAttempted,
 		EventBooked,
 		EventFailed,
-		EventCancelled,
+		EventCanceled,
 		EventExpired,
 	}
 }

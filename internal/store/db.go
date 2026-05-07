@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	// modernc.org/sqlite registers the "sqlite" driver with database/sql.
+	// Pure-Go, no CGO. Must stay imported even though no symbol is referenced.
 	_ "modernc.org/sqlite"
 )
 
@@ -41,7 +43,7 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 			return nil, err
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, fmt.Errorf("creating database directory: %w", err)
 	}
 

@@ -154,13 +154,13 @@ func (r rowScanner) Scan(dest ...any) error { return r.r.Scan(dest...) }
 
 func scanSnipeRow(s scanner) (*domain.SnipeState, error) {
 	var (
-		id           string
-		intentJSON   string
-		statusStr    string
-		scheduledAt  sql.NullString
-		resultJSON   sql.NullString
-		createdAt    string
-		updatedAt    string
+		id          string
+		intentJSON  string
+		statusStr   string
+		scheduledAt sql.NullString
+		resultJSON  sql.NullString
+		createdAt   string
+		updatedAt   string
 	)
 	if err := s.Scan(&id, &intentJSON, &statusStr, &scheduledAt, &resultJSON, &createdAt, &updatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -278,8 +278,8 @@ func statusPaths(target domain.Status) [][]domain.Status {
 		}
 	case domain.StatusFailed:
 		return [][]domain.Status{{domain.StatusSubmitted, domain.StatusFailed}}
-	case domain.StatusCancelled:
-		return [][]domain.Status{{domain.StatusSubmitted, domain.StatusCancelled}}
+	case domain.StatusCanceled:
+		return [][]domain.Status{{domain.StatusSubmitted, domain.StatusCanceled}}
 	case domain.StatusExpired:
 		return [][]domain.Status{
 			{domain.StatusSubmitted, domain.StatusScheduled, domain.StatusExpired},

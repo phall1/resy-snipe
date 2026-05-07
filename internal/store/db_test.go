@@ -79,7 +79,7 @@ func TestOpenWritesAndReads(t *testing.T) {
 	}
 }
 
-// Cancelled contexts must propagate through the helper rather than
+// Canceled contexts must propagate through the helper rather than
 // silently producing a connection.
 func TestOpenRespectsContext(t *testing.T) {
 	t.Parallel()
@@ -92,7 +92,7 @@ func TestOpenRespectsContext(t *testing.T) {
 	db, err := store.Open(ctx, path)
 	if err == nil {
 		_ = db.Close()
-		t.Fatal("Open with cancelled ctx should error")
+		t.Fatal("Open with canceled ctx should error")
 	}
 }
 

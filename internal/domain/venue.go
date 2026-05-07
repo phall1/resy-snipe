@@ -2,7 +2,6 @@ package domain
 
 import (
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -36,10 +35,10 @@ var ErrVenueMissingTZ = errors.New("venue: TZ is required")
 // Validate checks the mandatory fields. TZ is the load-bearing one.
 func (v Venue) Validate() error {
 	if v.Provider == "" {
-		return fmt.Errorf("venue: Provider is required")
+		return errors.New("venue: Provider is required")
 	}
 	if v.Ref == "" {
-		return fmt.Errorf("venue: Ref is required")
+		return errors.New("venue: Ref is required")
 	}
 	if v.TZ == nil {
 		return ErrVenueMissingTZ
@@ -47,7 +46,7 @@ func (v Venue) Validate() error {
 	return nil
 }
 
-// BookingPolicy parameterises the engine's booking behaviour for a
+// BookingPolicy parameterises the engine's booking behavior for a
 // single snipe. Defaults are picked by the engine; an Intent may
 // override.
 type BookingPolicy struct {

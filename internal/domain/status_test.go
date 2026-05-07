@@ -41,32 +41,32 @@ func TestKnownTransitions(t *testing.T) {
 	allowed := map[domain.Status][]domain.Status{
 		domain.StatusSubmitted: {
 			domain.StatusScheduled, domain.StatusDiscovering,
-			domain.StatusCancelled, domain.StatusFailed,
+			domain.StatusCanceled, domain.StatusFailed,
 		},
 		domain.StatusScheduled: {
 			domain.StatusAwaiting, domain.StatusDiscovering,
-			domain.StatusCancelled, domain.StatusFailed, domain.StatusExpired,
+			domain.StatusCanceled, domain.StatusFailed, domain.StatusExpired,
 		},
 		domain.StatusDiscovering: {
-			domain.StatusAwaiting, domain.StatusCancelled,
+			domain.StatusAwaiting, domain.StatusCanceled,
 			domain.StatusFailed, domain.StatusExpired,
 		},
 		domain.StatusAwaiting: {
-			domain.StatusFinding, domain.StatusCancelled,
+			domain.StatusFinding, domain.StatusCanceled,
 			domain.StatusFailed, domain.StatusExpired,
 		},
 		domain.StatusFinding: {
 			domain.StatusBooking, domain.StatusAwaiting,
-			domain.StatusCancelled, domain.StatusFailed, domain.StatusExpired,
+			domain.StatusCanceled, domain.StatusFailed, domain.StatusExpired,
 		},
 		domain.StatusBooking: {
 			domain.StatusBooked, domain.StatusFinding,
-			domain.StatusCancelled, domain.StatusFailed,
+			domain.StatusCanceled, domain.StatusFailed,
 		},
-		domain.StatusBooked:    nil,
-		domain.StatusFailed:    nil,
-		domain.StatusCancelled: nil,
-		domain.StatusExpired:   nil,
+		domain.StatusBooked:   nil,
+		domain.StatusFailed:   nil,
+		domain.StatusCanceled: nil,
+		domain.StatusExpired:  nil,
 	}
 
 	for _, from := range domain.AllStatuses() {
@@ -97,7 +97,7 @@ func TestTerminalsAreSinks(t *testing.T) {
 	terminals := []domain.Status{
 		domain.StatusBooked,
 		domain.StatusFailed,
-		domain.StatusCancelled,
+		domain.StatusCanceled,
 		domain.StatusExpired,
 	}
 	for _, from := range terminals {

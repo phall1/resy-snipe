@@ -1,0 +1,138 @@
+# golangci-lint configuration. Goal: maximum signal — every linter
+# that catches bugs or correctness issues is on. Stylistic-only,
+# framework-specific (for frameworks we don't use), and anti-Go-idiom
+# linters are off. Re-evaluate at every dependency bump.
+#
+# Run via `just lint`.
+
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: all
+  disable:
+    # Stylistic / whitespace bikeshedding — invasive auto-fixes.
+    - wsl
+    - wsl_v5
+    - nlreturn
+    - godot
+    - godoclint
+    - tagalign
+    - lll
+    - whitespace
+    # Anti-Go-idiom rules.
+    - exhaustruct       # Go's zero-value initialization is idiomatic.
+    - gochecknoglobals  # Sentinel errors, embed.FS are globals on purpose.
+    - gochecknoinits    # init() asserts the transition table is total.
+    - ireturn           # Constructors returning interfaces are fine.
+    - nonamedreturns
+    - noinlineerr       # `if err := x(); err != nil` is idiomatic.
+    - testpackage       # `package foo` test files coexist with `package foo_test`.
+    # Configuration-heavy linters that need project-specific lists to
+    # be useful — enable these once we have a definite policy.
+    - depguard
+    - forbidigo
+    - gomodguard
+    - gomodguard_v2
+    - tagliatelle
+    - musttag
+    # Famously high false-positive rates.
+    - wrapcheck
+    - varnamelen
+    - mnd
+    # err113 wants every error to be a sentinel `var ErrFoo = errors.New(...)`.
+    # Overkill for one-shot contextual errors; we already use sentinels
+    # where they matter (providers/store error taxonomies).
+    - err113
+    # Complexity metrics — humans judge complexity better than thresholds.
+    - cyclop
+    - gocognit
+    - gocyclo
+    - funlen
+    - nestif
+    - maintidx
+    # Frameworks / domains not used in this project.
+    - ginkgolinter
+    - testifylint
+    - zerologlint
+    - promlinter
+    - protogetter
+    - gosmopolitan
+    - arangolint
+    - clickhouselint
+    - asasalint
+    # Stylistic only: 14 methods on Store is the spec, grouped by entity.
+    - interfacebloat
+    # We don't allow TODO/FIXME at all (project policy), so the linter
+    # is moot but it also flags benign matches like the word in
+    # comments.
+    - godox
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - (*database/sql.Rows).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Tx).Rollback
+    govet:
+      enable-all: true
+      disable:
+        # Field alignment is micro-optimization; we value readability of
+        # struct field ordering over a few bytes of padding.
+        - fieldalignment
+        # shadow flags idiomatic `if err := f(); err != nil` patterns
+        # that the Go team itself does not warn on. Off by design.
+        - shadow
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+    exhaustive:
+      # Switches with an explicit default branch satisfy exhaustiveness
+      # — the default is the documented fallback path.
+      default-signifies-exhaustive: true
+    goconst:
+      min-occurrences: 5
+      ignore-tests: true
+    revive:
+      rules:
+        - name: var-naming
+        - name: package-comments
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: blank-imports
+        - name: context-keys-type
+        - name: time-naming
+        - name: unexported-return
+        - name: errorf
+        - name: dot-imports
+    misspell:
+      locale: US
+    nakedret:
+      max-func-lines: 0
+    gosec:
+      excludes:
+        # G115: integer overflow conversion. Many false positives in Go
+        # for benign int->int64 widenings; revisit if a real case lands.
+        - G115
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  # Don't suppress anything by default — we want to see all of it on
+  # first run, then decide what's a real issue and what's a per-line
+  # //nolint with explicit reason.
