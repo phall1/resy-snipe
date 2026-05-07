@@ -352,7 +352,7 @@ func TestPingSucceedsOn200(t *testing.T) {
 	}
 }
 
-func TestCompleteMFAStubBehaviour(t *testing.T) {
+func TestCompleteMFAStubBehavior(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	defer srv.Close()

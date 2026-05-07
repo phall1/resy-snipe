@@ -26,7 +26,7 @@ const stdoutTimestampFormat = "15:04:05"
 // don't interleave mid-line.
 //
 // The Clock dependency is injected so tests can pin timestamps and
-// production code never reaches for time.Now() directly.
+// production code never reaches for the wall clock directly.
 type StdoutNotifier struct {
 	mu  sync.Mutex
 	w   io.Writer
