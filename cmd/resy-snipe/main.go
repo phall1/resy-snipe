@@ -13,6 +13,7 @@ import (
 
 	"resy-snipe/internal/clock"
 	"resy-snipe/internal/domain"
+	"resy-snipe/internal/notify"
 )
 
 func main() {
@@ -67,7 +68,28 @@ func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) erro
 		slog.String("release", releaseSummary(intent.Release)),
 		slog.String("intent_hash", string(intent.Hash())),
 	)
+
+	// Construct the user-facing notifier. The Notifier interface is the
+	// seam where SMS / iMessage / chat-bot frontends will plug in; here
+	// we wire the Phase 1 stdout impl. The notifier is intentionally
+	// instantiated even though no engine.Run wiring exists yet — that
+	// integration lands in a downstream task. Holding the reference
+	// proves the construction is side-effect-free for tests that
+	// exercise run() without a TTY.
+	//
+	// TODO(engine-integration): once the engine exposes its lifecycle
+	// event stream, subscribe here and forward to notifier.Transition /
+	// notifier.Result. Today the snipe-running path is still a no-op.
+	_ = newCLINotifier(os.Stdout, clk)
+
 	return nil
+}
+
+// newCLINotifier returns the stdout notifier the CLI uses for live
+// transition + result rendering. Split out so tests can swap in a
+// fake writer without growing run()'s signature.
+func newCLINotifier(w io.Writer, clk clock.Clock) *notify.StdoutNotifier {
+	return notify.NewStdoutNotifier(w, clk)
 }
 
 // releaseSummary collapses the typed release strategy to a short
