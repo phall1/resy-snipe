@@ -73,9 +73,19 @@ func (e *Engine) RunBookingRace(ctx context.Context, state *SnipeState, sess pro
 		return fmt.Errorf("engine.RunBookingRace: enter Booking: %w", err)
 	}
 
-	// Race begins: shared ctx is canceled by the winner; siblings
-	// observe ctx.Done and exit ConfirmSlot cleanly.
-	raceCtx, cancel := context.WithCancel(ctx)
+	// Race begins.
+	//
+	// We derive raceCtx from a *detached* parent — context.WithoutCancel
+	// strips ctx's Done channel — so an external SIGTERM cancellation
+	// of ctx does not cancel an already-started /3/book attempt
+	// (bailing mid-POST risks a confirmed-but-orphaned reservation).
+	// The winner's cancel() still propagates to siblings via raceCtx
+	// itself, so race-and-cancel correctness is preserved.
+	//
+	// PrepareSlot below intentionally still uses ctx (the cancellable
+	// parent) — we DO want to bail before kicking off any new
+	// /3/details when shutdown is signaled.
+	raceCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 
 	results := make(chan *providers.Confirmation, len(ranked))
@@ -83,13 +93,15 @@ func (e *Engine) RunBookingRace(ctx context.Context, state *SnipeState, sess pro
 	intentHash := intent.Hash()
 
 	for i, slot := range ranked {
-		if raceCtx.Err() != nil {
+		if ctx.Err() != nil || raceCtx.Err() != nil {
 			break
 		}
-		// Serial PrepareSlot — anti-bot floor enforced between calls.
-		prepared, err := preparer.PrepareSlot(raceCtx, slot, sess)
+		// PrepareSlot uses the parent ctx (SIGTERM-cancellable). We do
+		// not want to kick off a new /3/details fetch after shutdown
+		// is signaled.
+		prepared, err := preparer.PrepareSlot(ctx, slot, sess)
 		if err != nil {
-			e.log.LogAttrs(raceCtx, slog.LevelWarn, "engine.RunBookingRace: PrepareSlot failed",
+			e.log.LogAttrs(ctx, slog.LevelWarn, "engine.RunBookingRace: PrepareSlot failed",
 				slog.String(domain.LogKeySnipeID, string(state.ID())),
 				slog.Int(domain.LogKeyAttempt, i+1),
 				slog.String("err", err.Error()),
@@ -124,9 +136,10 @@ func (e *Engine) RunBookingRace(ctx context.Context, state *SnipeState, sess pro
 		}(i, prepared)
 
 		// Honor the inter-call PollFloor between PrepareSlot calls so
-		// /3/details fetches don't tail-gate (anti-bot floor).
+		// /3/details fetches don't tail-gate (anti-bot floor). The
+		// parent ctx is the cancellable one here too.
 		if i < len(ranked)-1 {
-			if err := waitWithCtx(raceCtx, e.clock, e.pollInterval()); err != nil {
+			if err := waitWithCtx(ctx, e.clock, e.pollInterval()); err != nil {
 				break
 			}
 		}
