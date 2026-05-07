@@ -12,12 +12,10 @@ import (
 )
 
 // errUnsupportedReleaseStrategy is returned by Run when the snipe's
-// release strategy is one Phase 1 cannot schedule on its own. Phase 1
-// only knows how to schedule ExplicitRelease, which carries the
-// release time inline. DiscoveredRelease and ContinuousRelease both
-// require provider polling to determine when to fire and are deferred
-// to E3 (release strategies).
-var errUnsupportedReleaseStrategy = errors.New("engine: release strategy not yet supported by Run")
+// release strategy is one Phase 1 does not recognize. With E3 the
+// engine handles Explicit/Discovered/Continuous; this error remains
+// for forward-compatibility.
+var errUnsupportedReleaseStrategy = errors.New("engine: unsupported release strategy")
 
 // Run drives a single snipe through the Phase 1 scheduling loop:
 //
@@ -50,7 +48,7 @@ func (e *Engine) Run(ctx context.Context, id domain.SnipeID) error {
 	// the intent so that resumed runs (post-restart) can pick up where
 	// they left off without re-deriving the time.
 	if state.Status() == domain.StatusSubmitted {
-		scheduledAt, err := scheduledAtFromIntent(state.Intent())
+		scheduledAt, err := e.scheduledAtFromIntent(state.Intent())
 		if err != nil {
 			return fmt.Errorf("engine: derive scheduled_at for %s: %w", id, err)
 		}
@@ -113,29 +111,32 @@ func (e *Engine) waitAndFire(ctx context.Context, state *SnipeState, delay time.
 	}
 }
 
-// fireRelease performs the post-wake transition. Phase 1 stops at
-// Awaiting; E3 picks up from there.
+// fireRelease performs the post-wake action. For Explicit it
+// transitions Scheduled -> Awaiting and emits EventReleased. For
+// Discovered/Continuous it dispatches to the strategy-specific
+// polling loop (runStrategy in release.go).
 func (e *Engine) fireRelease(ctx context.Context, state *SnipeState) error {
-	return state.Transition(ctx, domain.StatusAwaiting, domain.EventReleased,
-		slog.String(domain.LogKeyVenueRef, state.Intent().Venue.String()),
-		slog.String(domain.LogKeyIntentHash, string(state.Intent().Hash())),
-	)
+	return e.runStrategy(ctx, state)
 }
 
-// scheduledAtFromIntent extracts the wall-clock fire time from an
-// intent's release strategy. Phase 1 only handles ExplicitRelease;
-// DiscoveredRelease and ContinuousRelease require provider polling
-// and are E3's job.
-func scheduledAtFromIntent(intent domain.Intent) (time.Time, error) {
+// scheduledAtFromIntent extracts the engine-wakes-up time from an
+// intent's release strategy:
+//   - ExplicitRelease: r.At (the venue's known release moment).
+//   - DiscoveredRelease: r.ProbeFrom (when the calendar polling loop
+//     should start).
+//   - ContinuousRelease: zero (the find polling loop runs immediately).
+func (e *Engine) scheduledAtFromIntent(intent domain.Intent) (time.Time, error) {
 	switch r := intent.Release.(type) {
 	case domain.ExplicitRelease:
 		return r.At, nil
-	case domain.DiscoveredRelease, domain.ContinuousRelease:
-		return time.Time{}, errUnsupportedReleaseStrategy
+	case domain.DiscoveredRelease:
+		return r.ProbeFrom, nil
+	case domain.ContinuousRelease:
+		return e.clock.Now(), nil
 	case nil:
 		return time.Time{}, errors.New("engine: intent has nil release strategy")
 	default:
-		return time.Time{}, fmt.Errorf("engine: unknown release strategy %T", r)
+		return time.Time{}, fmt.Errorf("%w %T", errUnsupportedReleaseStrategy, r)
 	}
 }
 

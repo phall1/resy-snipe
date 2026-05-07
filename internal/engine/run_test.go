@@ -290,8 +290,11 @@ func TestRunSmokeRealClock(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	elapsed := time.Since(start)
-	if elapsed < 50*time.Millisecond {
-		t.Errorf("Run returned in %s, expected at least 50ms", elapsed)
+	// Allow 40ms slack on the lower bound — different OSes round
+	// monotonic-clock samples differently and the wall-clock can
+	// shave a few ms off the scheduled 50ms wake.
+	if elapsed < 40*time.Millisecond {
+		t.Errorf("Run returned in %s, expected at least ~50ms", elapsed)
 	}
 	if elapsed > 2*time.Second {
 		t.Errorf("Run returned in %s, expected well under 2s", elapsed)
