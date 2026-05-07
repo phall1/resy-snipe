@@ -4,42 +4,86 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
+
+	"resy-snipe/internal/clock"
+	"resy-snipe/internal/domain"
 )
 
 func main() {
-	if err := run(os.Args[1:], os.Stderr); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stderr, clock.NewReal()); err != nil {
 		fmt.Fprintln(os.Stderr, "resy-snipe: error:", err)
 		os.Exit(1)
 	}
 }
 
-// run parses CLI flags and constructs the dependencies needed by the
-// engine. It is split out from main so it can be exercised in tests
-// without touching real os.Exit / os.Args / os.Stderr.
-func run(args []string, logOut io.Writer) error {
-	fs := flag.NewFlagSet("resy-snipe", flag.ContinueOnError)
-	fs.SetOutput(logOut)
-	levelFlag := fs.String("log-level", "info", "log level: debug, info, warn, error")
-	if err := fs.Parse(args); err != nil {
-		return fmt.Errorf("parsing flags: %w", err)
-	}
-
-	level, err := parseLogLevel(*levelFlag)
+// run parses CLI flags (and optionally walks the interactive prompt
+// flow), assembles a domain.Intent, and — for now — emits the assembled
+// Intent through the structured logger. engine.Run wiring lands in a
+// downstream task.
+//
+// run is split out from main so it can be exercised in tests without
+// touching real os.Exit / os.Args / os.Stderr / os.Stdin.
+func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) error {
+	opts, err := parseFlags(args, logOut)
 	if err != nil {
 		return err
 	}
 
+	level, err := parseLogLevel(opts.logLevel)
+	if err != nil {
+		return err
+	}
 	logger := newCLILogger(logOut, level)
-	_ = logger // engine wiring lands in a later task; logger is constructed
-	// here so main's responsibility is settled and DI plumbing is ready.
 
+	// Default missing legacy flags from the historical config values so
+	// `resy-snipe -snipe-time 00:00` (the README's hello-world example)
+	// still produces a runnable Intent. The clock is injected so this
+	// stays deterministic in tests.
+	now := clk.Now().In(time.Local)
+	opts.applyDefaults(now)
+
+	if opts.interactive {
+		if err := runInteractive(&opts, stdin, logOut); err != nil {
+			return fmt.Errorf("interactive prompt: %w", err)
+		}
+	}
+
+	intent, err := toIntent(opts, now)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("intent assembled",
+		slog.String(domain.LogKeyVenueRef, intent.Venue.String()),
+		slog.String("date", intent.Date.String()),
+		slog.Int("party_size", intent.PartySize),
+		slog.Int("slot_prefs", len(intent.SlotPrefs)),
+		slog.String("release", releaseSummary(intent.Release)),
+		slog.String("intent_hash", string(intent.Hash())),
+	)
 	return nil
+}
+
+// releaseSummary collapses the typed release strategy to a short
+// human-readable tag for log output. Engine wiring will replace this
+// with the actual scheduled timeline.
+func releaseSummary(r domain.ReleaseStrategy) string {
+	switch v := r.(type) {
+	case domain.ExplicitRelease:
+		return "explicit@" + v.At.Format(time.RFC3339)
+	case domain.DiscoveredRelease:
+		return "discovered[" + v.ProbeFrom.Format(time.RFC3339) + "→" + v.ProbeUntil.Format(time.RFC3339) + "]"
+	case domain.ContinuousRelease:
+		return "continuous→" + v.Until.Format(time.RFC3339)
+	default:
+		return "<unknown>"
+	}
 }
 
 // parseLogLevel maps the CLI string into an slog.Level.

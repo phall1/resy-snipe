@@ -6,9 +6,18 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
+	"resy-snipe/internal/clock"
 	"resy-snipe/internal/domain"
 )
+
+// fixedNow is the canonical pinned clock instant used by the cmd-level
+// tests. Choosing a date well in the future keeps any default
+// reservation-date math (now+7d) inside the same year.
+var fixedNow = time.Date(2026, time.June, 1, 9, 0, 0, 0, time.UTC)
+
+func newTestClock() clock.Clock { return clock.NewFake(fixedNow) }
 
 func TestParseLogLevel(t *testing.T) {
 	t.Parallel()
@@ -50,7 +59,7 @@ func TestParseLogLevelRejectsUnknown(t *testing.T) {
 func TestRunRejectsBadLogLevel(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	err := run([]string{"--log-level", "garbage"}, &buf)
+	err := run([]string{"--log-level", "garbage"}, strings.NewReader(""), &buf, newTestClock())
 	if err == nil {
 		t.Fatal("run with bad log level should error")
 	}
@@ -61,7 +70,10 @@ func TestRunRejectsBadLogLevel(t *testing.T) {
 
 func TestRunAcceptsValidLogLevel(t *testing.T) {
 	t.Parallel()
-	if err := run([]string{"--log-level", "debug"}, io.Discard); err != nil {
+	// Provide -snipe-time so the chosen release strategy default is
+	// explicit and toIntent doesn't leave anything unset.
+	args := []string{"--log-level", "debug", "-snipe-time", "00:00"}
+	if err := run(args, strings.NewReader(""), io.Discard, newTestClock()); err != nil {
 		t.Fatalf("run with valid log level: %v", err)
 	}
 }
