@@ -42,9 +42,15 @@ type Query struct {
 	Text string
 }
 
-// DateRange is an inclusive [Start, End] calendar window.
+// DateRange is an inclusive [Start, End] calendar window for a calendar
+// query. PartySize is included because some providers (notably OpenTable)
+// expose per-date availability as a party-size-dependent view: a date
+// open for 2 may be closed for 6. A zero PartySize means the adapter
+// picks a default (Resy's calendar endpoint is party-coarse and ignores
+// it; OpenTable's per-day fan-out cannot).
 type DateRange struct {
 	Start, End domain.Date
+	PartySize  int
 }
 
 // Calendar is the venue-availability view returned by Provider.Calendar.
