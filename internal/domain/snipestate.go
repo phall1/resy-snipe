@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"log/slog"
+	"time"
+)
 
 // Result describes the outcome of a successful booking. Failure modes
 // are recorded on the Event log instead of populating Result.
@@ -10,13 +13,15 @@ type Result struct {
 }
 
 // Event is a single audit record appended every time a SnipeState
-// transitions or otherwise emits a noteworthy fact. The struct is a
-// placeholder here; D4 fills in the typed fields and the idempotency
-// key derivation.
+// transitions or otherwise emits a noteworthy fact. Attrs is the
+// typed, slog-style attribute payload. We intentionally use
+// []slog.Attr rather than map[string]any so the field stays typed at
+// the language level and so the same attributes can be passed to the
+// engine's logger without a conversion.
 type Event struct {
-	At      time.Time
-	Kind    string // refined to a typed enum in D4
-	Message string
+	Type  EventType
+	At    time.Time
+	Attrs []slog.Attr
 }
 
 // SnipeState is the engine's per-snipe view: the user's Intent plus the
