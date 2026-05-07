@@ -4,7 +4,18 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"time"
+
+	"resy-snipe/internal/domain"
 )
+
+// NewSessionForTest builds a *Session with the supplied fields. Phase-1
+// tests use this when they need a session with an artificial exp (e.g.
+// to exercise the locally-expired Ping path) without round-tripping
+// through Login again.
+func NewSessionForTest(user domain.UserID, jwt string, exp time.Time) *Session {
+	return &Session{userID: user, jwt: jwt, expiresAt: exp}
+}
 
 // GetForTest exercises the unexported do() through a stable test
 // surface. R2/R3/R4 will call do() from real endpoint methods; until

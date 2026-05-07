@@ -47,6 +47,29 @@ type Client struct {
 	userAgent  string
 	log        *slog.Logger
 	clock      clock.Clock
+	store      SessionStore
+}
+
+// SessionStore is the slim subset of internal/store.Store this adapter
+// needs for session persistence. Declaring it locally lets tests
+// substitute an in-memory fake without spinning up SQLite, and lets
+// the production wiring satisfy it with a real *store.SQLiteStore via
+// a thin adapter.
+type SessionStore interface {
+	UpsertSession(ctx context.Context, s SessionRow) error
+	GetSession(ctx context.Context, user domain.UserID, provider domain.ProviderID, now time.Time) (SessionRow, error)
+}
+
+// SessionRow mirrors store.SessionRow at this seam. Wiring code at the
+// cmd/ layer translates between the two so internal/resy doesn't have
+// to import internal/store directly.
+type SessionRow struct {
+	UserID    domain.UserID
+	Provider  domain.ProviderID
+	JWT       string
+	ExpiresAt time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Option configures a Client at construction.
@@ -63,6 +86,10 @@ func WithAPIKey(k string) Option { return func(x *Client) { x.apiKey = k } }
 
 // WithUserAgent overrides the User-Agent string.
 func WithUserAgent(ua string) Option { return func(x *Client) { x.userAgent = ua } }
+
+// WithStore enables session persistence. Without this, Login still
+// returns a Session but does not write it; LoadSession is a no-op.
+func WithStore(s SessionStore) Option { return func(x *Client) { x.store = s } }
 
 // NewClient constructs a Client with sensible defaults. All
 // dependencies are required; nil panics fail-fast at boot.
