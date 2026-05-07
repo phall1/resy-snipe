@@ -440,13 +440,13 @@ func TestObservedNotFound(t *testing.T) {
 	}
 }
 
-// storeUser writes a minimal users row directly via the underlying DB
+// storeUser writes a minimal users row directly via the DB accessor
 // so session FK constraints are satisfied. Users management isn't
 // surfaced by the Store interface in Phase 1.
 func storeUser(s *store.SQLiteStore, id string) (string, error) {
-	// Reach into the store's *sql.DB through a small accessor; the
-	// store package exposes a test-only escape hatch below.
-	if err := store.SeedUserForTest(s, id); err != nil {
+	_, err := s.DB().ExecContext(context.Background(),
+		`INSERT INTO users (id) VALUES (?)`, id)
+	if err != nil {
 		return "", err
 	}
 	return id, nil

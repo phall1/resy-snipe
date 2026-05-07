@@ -45,6 +45,13 @@ type Store interface {
 	AppendEvent(ctx context.Context, snipeID domain.SnipeID, e domain.Event) error
 	ListEventsBySnipe(ctx context.Context, snipeID domain.SnipeID) ([]domain.Event, error)
 
+	// TransitionSnipe atomically writes the supplied SnipeState (which
+	// must already carry the post-transition status and a fresh
+	// UpdatedAt) and appends ev to the audit log in a single
+	// transaction. Returns ErrNotFound if the snipe row does not
+	// exist; on any failure neither write lands.
+	TransitionSnipe(ctx context.Context, s *domain.SnipeState, ev domain.Event) error
+
 	// Sessions ---------------------------------------------------
 	UpsertSession(ctx context.Context, s SessionRow) error
 	// GetSession returns ErrSessionExpired when the row exists but

@@ -68,3 +68,22 @@ func (s *SnipeState) Transition(to Status) error {
 	s.status = to
 	return nil
 }
+
+// Clone returns a deep copy of s suitable for try-and-discard
+// transitions. The engine clones the live state, applies a candidate
+// Transition, persists, and only then swaps in the candidate so a
+// failed write leaves the live state untouched.
+func (s *SnipeState) Clone() *SnipeState {
+	c := *s
+	if s.Result != nil {
+		r := *s.Result
+		c.Result = &r
+	}
+	if len(s.Events) > 0 {
+		c.Events = append([]Event(nil), s.Events...)
+	}
+	if len(s.Intent.SlotPrefs) > 0 {
+		c.Intent.SlotPrefs = append([]SlotPreference(nil), s.Intent.SlotPrefs...)
+	}
+	return &c
+}

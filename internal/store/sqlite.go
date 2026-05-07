@@ -22,6 +22,12 @@ func NewSQLiteStore(db *sql.DB) *SQLiteStore {
 	return &SQLiteStore{db: db}
 }
 
+// DB returns the underlying *sql.DB. Tests use this to run setup or
+// teardown SQL that doesn't fit the Store interface (seeding fixture
+// rows, deleting a row to provoke a missing-row code path).
+// Production code must go through the Store interface, not this.
+func (s *SQLiteStore) DB() *sql.DB { return s.db }
+
 // Compile-time interface check.
 var _ Store = (*SQLiteStore)(nil)
 
@@ -289,6 +295,68 @@ func parseStatus(s string) (domain.Status, error) {
 		}
 	}
 	return 0, fmt.Errorf("unknown status %q", s)
+}
+
+// TransitionSnipe atomically updates the snipe row and appends an event.
+func (s *SQLiteStore) TransitionSnipe(ctx context.Context, snipe *domain.SnipeState, ev domain.Event) error {
+	intentJSON, err := MarshalIntent(snipe.Intent)
+	if err != nil {
+		return fmt.Errorf("TransitionSnipe encode intent: %w", err)
+	}
+	resultJSON, err := MarshalResult(snipe.Result)
+	if err != nil {
+		return fmt.Errorf("TransitionSnipe encode result: %w", err)
+	}
+	attrsJSON, err := EncodeAttrs(ev.Attrs)
+	if err != nil {
+		return fmt.Errorf("TransitionSnipe encode attrs: %w", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("TransitionSnipe begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx, `
+		UPDATE snipes
+		SET intent_hash=?, intent_json=?, status=?, scheduled_at=?, result_json=?, updated_at=?
+		WHERE id=?`,
+		string(snipe.Intent.Hash()),
+		string(intentJSON),
+		snipe.Status().String(),
+		nullableTime(snipe.ScheduledAt),
+		nullableBytes(resultJSON),
+		formatTime(snipe.UpdatedAt),
+		string(snipe.ID),
+	)
+	if err != nil {
+		return fmt.Errorf("TransitionSnipe update: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("TransitionSnipe rows: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("TransitionSnipe %s: %w", snipe.ID, ErrNotFound)
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO events (snipe_id, type, at, fields_json)
+		VALUES (?, ?, ?, ?)`,
+		string(snipe.ID),
+		string(ev.Type),
+		formatTime(ev.At),
+		nullableBytes(attrsJSON),
+	)
+	if err != nil {
+		return fmt.Errorf("TransitionSnipe append: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("TransitionSnipe commit: %w", err)
+	}
+	return nil
 }
 
 // Events ----------------------------------------------------------------
