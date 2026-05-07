@@ -41,13 +41,14 @@ const (
 // slog emission. Endpoint-specific logic (Login, Find, Calendar,
 // Details, Book) lives in sibling files in this package.
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
-	apiKey     string
-	userAgent  string
-	log        *slog.Logger
-	clock      clock.Clock
-	store      SessionStore
+	httpClient  *http.Client
+	baseURL     string
+	apiKey      string
+	userAgent   string
+	log         *slog.Logger
+	clock       clock.Clock
+	store       SessionStore
+	idempotency *idempotencyTracker
 }
 
 // SessionStore is the slim subset of internal/store.Store this adapter
@@ -110,11 +111,12 @@ func NewClient(log *slog.Logger, c clock.Clock, opts ...Option) *Client {
 			// is a hard ceiling so a mis-set ctx cannot hang forever.
 			Timeout: 30 * time.Second,
 		},
-		baseURL:   DefaultBaseURL,
-		apiKey:    resolveAPIKey(),
-		userAgent: DefaultUserAgent,
-		log:       log,
-		clock:     c,
+		baseURL:     DefaultBaseURL,
+		apiKey:      resolveAPIKey(),
+		userAgent:   DefaultUserAgent,
+		log:         log,
+		clock:       c,
+		idempotency: &idempotencyTracker{},
 	}
 	for _, o := range opts {
 		o(cl)
@@ -154,6 +156,20 @@ func (c *Client) do(
 	body io.Reader,
 	authToken string,
 ) ([]byte, *Response, error) {
+	return c.doWithExtraHeaders(ctx, method, path, query, body, authToken, nil)
+}
+
+// doWithExtraHeaders is do() plus a per-call header bag. Empty values
+// are skipped — the X-Resy-Idempotency-Key path passes "" when no key
+// applies, so the absence is handled here rather than at every caller.
+func (c *Client) doWithExtraHeaders(
+	ctx context.Context,
+	method, path string,
+	query url.Values,
+	body io.Reader,
+	authToken string,
+	extra map[string]string,
+) ([]byte, *Response, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		return nil, nil, errMissingCtxDeadline
 	}
@@ -168,6 +184,12 @@ func (c *Client) do(
 		return nil, nil, fmt.Errorf("resy %s %s: build request: %w", method, path, err)
 	}
 	c.applyHeaders(req, authToken)
+	for k, v := range extra {
+		if v == "" {
+			continue
+		}
+		req.Header.Set(k, v)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

@@ -82,8 +82,13 @@ type FindRequest struct {
 // Slot is one open reservation that matched a FindRequest. The engine
 // orders them by user preference, fetches details for each (serially,
 // per BookingPolicy), then races /3/book across the survivors.
+//
+// Date carries the venue-local calendar date so Book can re-issue
+// /3/details for this slot without the engine threading the date
+// separately.
 type Slot struct {
 	Venue     domain.VenueRef
+	Date      domain.Date
 	Time      domain.WallTime
 	TableType string
 	PartySize int
