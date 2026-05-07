@@ -74,6 +74,13 @@ type cliOptions struct {
 	releaseStrategy string
 	retryWindow     time.Duration
 	logLevel        string
+	// user is the email address that identifies which persisted
+	// session to load before running a snipe. When empty, the snipe
+	// path skips the session-load step and the engine will (in a
+	// future task) operate in unauthenticated discovery mode. The
+	// canonical "no valid session" error message is surfaced when
+	// this flag is set but no usable session is in the store.
+	user string
 
 	// snipeTimeProvided is true when the user explicitly supplied
 	// -snipe-time. It influences the default release strategy: explicit
@@ -116,6 +123,9 @@ func parseFlags(args []string, out io.Writer) (cliOptions, error) {
 	fs.DurationVar(&opts.retryWindow, "retry-window", defaultRetryWindow,
 		"Bounds the engine's polling window for ContinuousRelease and the probe span for DiscoveredRelease.")
 	fs.StringVar(&opts.logLevel, "log-level", "info", "log level: debug, info, warn, error")
+	fs.StringVar(&opts.user, "user", "",
+		"Email of the previously logged-in user; loads the persisted Resy session. "+
+			"Run `resy-snipe login` first to populate.")
 	if err := fs.Parse(args); err != nil {
 		return cliOptions{}, fmt.Errorf("parsing flags: %w", err)
 	}

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -31,6 +32,21 @@ func main() {
 // run is split out from main so it can be exercised in tests without
 // touching real os.Exit / os.Args / os.Stderr / os.Stdin.
 func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) error {
+	// Subcommand dispatch. The first positional arg (when present and
+	// not a flag) selects the subcommand; everything else falls through
+	// to the existing snipe flow. Today only `login` is recognized;
+	// future subcommands (e.g. `logout`, `status`) plug in here.
+	if len(args) > 0 && args[0] == "login" {
+		ctx := context.Background()
+		client, cleanup, err := openCLIClient(ctx,
+			newCLILogger(logOut, slog.LevelInfo), clk)
+		if err != nil {
+			return fmt.Errorf("login bootstrap: %w", err)
+		}
+		defer func() { _ = cleanup() }()
+		return runLogin(ctx, stdin, logOut, client)
+	}
+
 	opts, err := parseFlags(args, logOut)
 	if err != nil {
 		return err
@@ -81,6 +97,27 @@ func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) erro
 	// event stream, subscribe here and forward to notifier.Transition /
 	// notifier.Result. Today the snipe-running path is still a no-op.
 	_ = newCLINotifier(os.Stdout, clk)
+
+	// Session load: when the user passed -user, look up the persisted
+	// session before handing off to the engine. ErrNotFound /
+	// ErrSessionExpired both surface as the actionable
+	// "run 'resy-snipe login' first" message — the spec is explicit
+	// that an expired session must NOT silently re-login mid-snipe.
+	//
+	// When -user is empty we skip this step so the existing flag-only
+	// invocation paths (and the ones the README documents today) keep
+	// working. Engine wiring in a downstream task will tighten this.
+	if strings.TrimSpace(opts.user) != "" {
+		ctx := context.Background()
+		client, cleanup, err := openCLIClient(ctx, logger, clk)
+		if err != nil {
+			return fmt.Errorf("snipe bootstrap: %w", err)
+		}
+		defer func() { _ = cleanup() }()
+		if _, err := loadSessionForSnipe(ctx, client, domain.UserID(opts.user), logger); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
