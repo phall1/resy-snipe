@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"resy-snipe/internal/clock"
@@ -26,6 +27,13 @@ type Engine struct {
 	log      *slog.Logger
 	provider providers.Provider
 	policy   domain.BookingPolicy
+
+	// Subscriber registry for the lifecycle event stream. See
+	// subscribe.go for the public Subscribe / Notification surface.
+	// nextSubID is monotonic so emit can deliver in registration order.
+	subsMu    sync.RWMutex
+	subs      map[uint64]Subscriber
+	nextSubID uint64
 }
 
 // Option configures an Engine at construction.
@@ -118,5 +126,15 @@ func (e *Engine) Submit(ctx context.Context, id domain.SnipeID, intent domain.In
 		slog.String(domain.LogKeyIntentHash, string(intent.Hash())),
 		slog.String(domain.LogKeyVenueRef, intent.Venue.String()),
 	)
+	// Submitted is the bootstrap emission — there is no prior status,
+	// so From is nil. Consumers that care about transitions can ignore
+	// nil-From notifications; consumers rendering a full lifecycle
+	// trace use it as the start marker.
+	e.emit(Notification{
+		SnipeID: id,
+		From:    nil,
+		To:      domain.StatusSubmitted,
+		Event:   ev,
+	})
 	return &SnipeState{inner: inner, e: e}, nil
 }

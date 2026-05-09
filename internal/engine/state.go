@@ -89,5 +89,13 @@ func (s *SnipeState) Transition(
 		slog.String("to", to.String()),
 	}, finalAttrs...)
 	s.e.log.LogAttrs(ctx, slog.LevelInfo, "snipe transition", logAttrs...)
+
+	fromCopy := from
+	s.e.emit(Notification{
+		SnipeID: candidate.ID,
+		From:    &fromCopy,
+		To:      to,
+		Event:   ev,
+	})
 	return nil
 }

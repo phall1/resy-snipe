@@ -187,5 +187,13 @@ func (s *SnipeState) transitionToScheduled(ctx context.Context, scheduledAt time
 		slog.String("to", to.String()),
 	}, attrs...)
 	s.e.log.LogAttrs(ctx, slog.LevelInfo, "snipe transition", logAttrs...)
+
+	fromCopy := from
+	s.e.emit(Notification{
+		SnipeID: candidate.ID,
+		From:    &fromCopy,
+		To:      to,
+		Event:   ev,
+	})
 	return nil
 }
