@@ -95,6 +95,24 @@ prints the assembled Intent and exits. This is intentional: silently
 sniping with whichever session happens to be in the store is exactly
 the kind of footgun the spec calls out.
 
+### Anti-bot signing (optional)
+
+The Resy adapter has a pluggable seam for PerimeterX-aware signing.
+Without configuration, it's a no-op and the binary behaves exactly as
+the docs above describe. If you have a signing binary that produces
+the headers Resy's anti-bot pipeline expects, point at it via:
+
+```bash
+export RESY_SNIPE_SIGNER_BIN=/path/to/your-signer
+```
+
+The binary is invoked once per `/3/details` and `/3/book` call as
+`<bin> sign --provider resy <path>`; it must write JSON to stdout in
+the form `{"headers": {"x-px-foo": "..."}}`. On a `403` anti-bot
+response the adapter calls `<bin> reset --provider resy` and retries
+the request once. See [docs/anti-bot.md](docs/anti-bot.md) for the
+full envelope.
+
 ---
 
 ## CLI surface
@@ -135,6 +153,8 @@ internal/
   resy/              Provider implementation: typed HTTP client, login
                      with MFA, calendar/find/details/book endpoints,
                      anti-bot classifier, JWT-exp session.
+  resy/sign/         Anti-bot signing seam (Signer interface + Noop
+                     default + Subprocess wrapper). See docs/anti-bot.md.
   store/             SQLite (modernc, WAL) + schema migrations + typed
                      payload codec.
   clock/             Clock interface + real + fake (drives tests).
@@ -190,8 +210,9 @@ booking, graceful shutdown, full state-machine persistence, end-to-end
 test coverage. The CLI snipe path is wired end-to-end — `resy-snipe -user
 … -snipe-time …` actually books.
 
-Open: anti-bot signing (printing-press integration) and a Phase 2
-daemon mode are tracked in [docs/work-items.md](docs/work-items.md).
+Anti-bot signing is wired as a pluggable seam (see "Anti-bot
+signing" above and [docs/anti-bot.md](docs/anti-bot.md)). A Phase 2
+daemon mode is tracked in [docs/work-items.md](docs/work-items.md).
 
 For project-state details and what's next, see [docs/state.md](docs/state.md).
 

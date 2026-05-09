@@ -54,9 +54,13 @@ coverage:
   the adapter satisfies the type), but a call panics with a clear
   "not implemented" error. See
   [`provider_adapter.go`](../cmd/resy-snipe/provider_adapter.go).
-- **Anti-bot recovery**: detection works (`ErrAntiBotChallenge`); the
-  engine surfaces it as terminal. No re-mint / retry. See
-  [anti-bot.md](anti-bot.md).
+- **Anti-bot recovery**: seam wired. Detection
+  (`ErrAntiBotChallenge`) plus a sign-and-retry envelope on
+  `/3/details` and `/3/book` that calls `Signer.Reset(ctx)` and
+  retries once on a 403 anti-bot response. The default Signer
+  (`sign.Noop`) is a no-op, so behavior is unchanged unless
+  `RESY_SNIPE_SIGNER_BIN` points at a signing binary that produces
+  PerimeterX-aware headers. See [anti-bot.md](anti-bot.md).
 - **`-user` is required for a real snipe**. Without it, the binary
   runs in dry-run preview (logs the Intent and exits). This is
   defensive — see the rationale in the README.

@@ -146,7 +146,7 @@ func (c *Client) fetchDetails(
 		"day":        {dayFromSlot(slot)},
 		"party_size": {strconv.Itoa(slot.PartySize)},
 	}
-	body, resp, err := c.do(ctx, http.MethodGet, "/3/details", q, nil, jwt)
+	body, resp, err := c.doSignedAndRetry(ctx, http.MethodGet, "/3/details", q, nil, jwt, nil)
 	if err != nil {
 		return DetailsResponse{}, fmt.Errorf("resy.Book details: %w", err)
 	}
@@ -181,9 +181,10 @@ func (c *Client) postBookWithIdempotency(
 		"book_token":            {bookToken},
 		"struct_payment_method": {fmt.Sprintf(`{"id":%d}`, paymentID)},
 	}
-	body, resp, err := c.doWithExtraHeaders(ctx,
+	bodyFactory := func() io.Reader { return formReader(form) }
+	body, resp, err := c.doSignedAndRetry(ctx,
 		http.MethodPost, "/3/book", nil,
-		formReader(form), jwt,
+		bodyFactory, jwt,
 		map[string]string{IdempotencyKeyHeader: idempotencyKey},
 	)
 	if err != nil {

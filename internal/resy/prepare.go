@@ -41,7 +41,7 @@ func (c *Client) PrepareSlot(ctx context.Context, slot providers.Slot, sess prov
 		"day":        {dayFromSlot(slot)},
 		"party_size": {strconv.Itoa(slot.PartySize)},
 	}
-	body, resp, err := c.do(ctx, http.MethodGet, "/3/details", q, nil, rs.jwt)
+	body, resp, err := c.doSignedAndRetry(ctx, http.MethodGet, "/3/details", q, nil, rs.jwt, nil)
 	if err != nil {
 		return providers.Slot{}, fmt.Errorf("resy.PrepareSlot: %w", err)
 	}

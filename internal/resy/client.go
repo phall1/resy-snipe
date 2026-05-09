@@ -13,6 +13,7 @@ import (
 
 	"resy-snipe/internal/clock"
 	"resy-snipe/internal/domain"
+	"resy-snipe/internal/resy/sign"
 )
 
 // Resy's API host. Tests override via WithBaseURL.
@@ -48,6 +49,7 @@ type Client struct {
 	log         *slog.Logger
 	clock       clock.Clock
 	store       SessionStore
+	signer      sign.Signer
 	idempotency *idempotencyTracker
 }
 
@@ -92,6 +94,20 @@ func WithUserAgent(ua string) Option { return func(x *Client) { x.userAgent = ua
 // returns a Session but does not write it; LoadSession is a no-op.
 func WithStore(s SessionStore) Option { return func(x *Client) { x.store = s } }
 
+// WithSigner installs a sign.Signer so /3/details and /3/book pick up
+// PerimeterX-aware signing headers and recover from
+// providers.ErrAntiBotChallenge via the sign-and-retry path. Default
+// is sign.Noop, which is a true no-op (no headers, no errors), so
+// callers that have not opted in see today's behavior unchanged.
+func WithSigner(s sign.Signer) Option {
+	return func(x *Client) {
+		if s == nil {
+			s = sign.Noop{}
+		}
+		x.signer = s
+	}
+}
+
 // NewClient constructs a Client with sensible defaults. All
 // dependencies are required; nil panics fail-fast at boot.
 //
@@ -116,6 +132,7 @@ func NewClient(log *slog.Logger, c clock.Clock, opts ...Option) *Client {
 		userAgent:   DefaultUserAgent,
 		log:         log,
 		clock:       c,
+		signer:      sign.Noop{},
 		idempotency: &idempotencyTracker{},
 	}
 	for _, o := range opts {

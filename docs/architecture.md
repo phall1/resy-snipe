@@ -35,9 +35,17 @@ Rules:
 - **`internal/store`** depends on `domain` only. SQL/SQLite is hidden
   behind the `Store` interface; everything else gets the interface.
 - **`internal/resy`** is one concrete `providers.Provider`
-  implementation. Depends on `providers`, `domain`, `clock`. Does
-  **not** depend on `store` — session persistence goes through a slim
-  local `SessionStore` interface that `cmd/` adapts a real store to.
+  implementation. Depends on `providers`, `domain`, `clock`,
+  `resy/sign`. Does **not** depend on `store` — session persistence
+  goes through a slim local `SessionStore` interface that `cmd/`
+  adapts a real store to.
+- **`internal/resy/sign`** is the anti-bot signing seam consulted by
+  `internal/resy` before each `/3/details` and `/3/book` call.
+  Depends only on `internal/clock`. Ships a `Noop` default (so every
+  caller that hasn't opted in keeps working unchanged) and a
+  `Subprocess` impl that shells out to an operator-supplied signing
+  binary configured via `RESY_SNIPE_SIGNER_BIN`. See
+  [anti-bot.md](anti-bot.md).
 - **`internal/notify`** depends on `domain` only. The Notifier
   interface lives here.
 - **`internal/engine`** depends on `providers`, `store`, `domain`,
