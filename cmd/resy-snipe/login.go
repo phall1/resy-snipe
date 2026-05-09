@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"time"
 
 	"resy-snipe/internal/clock"
 	"resy-snipe/internal/domain"
 	"resy-snipe/internal/resy"
+	"resy-snipe/internal/resy/sign"
 	"resy-snipe/internal/store"
 )
 
@@ -209,12 +211,28 @@ func openCLIClient(ctx context.Context, logger *slog.Logger, clk clock.Clock) (*
 	return &clientAdapter{inner: c}, db.Close, nil
 }
 
+// signerBinEnv is the env var the user sets to point the resy adapter
+// at a PerimeterX-aware signing binary. When set, openSnipeBackend
+// constructs a sign.Subprocess wrapper around it; when empty, the
+// adapter falls back to sign.Noop and behaves exactly as before R7.
+//
+// The expected wire format is documented in internal/resy/sign/doc.go;
+// see also docs/anti-bot.md for the full integration shape.
+const signerBinEnv = "RESY_SNIPE_SIGNER_BIN"
+
 // openSnipeBackend wires the production stack the snipe path needs:
 // a *resy.Client (for Login/Find/Book and the SlotPreparer surface
 // the engine asserts at runtime) and the same *store.SQLiteStore
 // that the engine and the session adapter both read from. The single
 // underlying *sql.DB is shared across both — the cleanup closes it
 // exactly once.
+//
+// If RESY_SNIPE_SIGNER_BIN is set, the resy.Client is also wired with
+// a sign.Subprocess Signer pointing at that binary. The Signer is
+// best-effort: a misconfigured binary surfaces as logged warnings on
+// the per-call Sign path; the adapter still attempts the request and
+// the existing classifier handles the resulting upstream failure. A
+// missing env var falls back to sign.Noop, matching pre-R7 behavior.
 //
 // Distinct from openCLIClient because the snipe path needs the typed
 // Resy client and the SQL store handle directly (one to wrap as the
@@ -230,6 +248,35 @@ func openSnipeBackend(ctx context.Context, logger *slog.Logger, clk clock.Clock)
 		return nil, nil, nil, fmt.Errorf("migrate db: %w", err)
 	}
 	sqlStore := store.NewSQLiteStore(db)
-	c := resy.NewClient(logger, clk, resy.WithStore(newSessionStoreAdapter(sqlStore)))
+	opts := []resy.Option{resy.WithStore(newSessionStoreAdapter(sqlStore))}
+	if signer := buildSigner(logger, clk); signer != nil {
+		opts = append(opts, resy.WithSigner(signer))
+	}
+	c := resy.NewClient(logger, clk, opts...)
 	return c, sqlStore, db.Close, nil
+}
+
+// buildSigner returns a sign.Subprocess pinned to the binary at
+// RESY_SNIPE_SIGNER_BIN, or nil when the env var is unset. A nil
+// return tells openSnipeBackend to skip WithSigner entirely so the
+// Client's default sign.Noop stays in place.
+func buildSigner(logger *slog.Logger, clk clock.Clock) sign.Signer {
+	bin := os.Getenv(signerBinEnv)
+	if bin == "" {
+		return nil
+	}
+	s, err := sign.NewSubprocess(sign.SubprocessConfig{
+		Bin:    bin,
+		Logger: logger,
+		Clock:  clk,
+	})
+	if err != nil {
+		logger.Warn("signer construction failed; falling back to noop",
+			slog.String("bin", bin),
+			slog.String("err", err.Error()))
+		return nil
+	}
+	logger.Info("anti-bot signer wired",
+		slog.String("bin", bin))
+	return s
 }

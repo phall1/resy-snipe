@@ -47,17 +47,22 @@ The 38 closed P1/P2 issues that built the foundation:
 Plus **E8 (subscriber surface)** and **E7/C4 (engine ↔ CLI wiring)**
 that made the binary actually book.
 
+## Phase 1.5 — closed
+
+- **R7: printing-press integration** (resy-snipe-ou3, P2) — *closed*.
+  Shipped as the `internal/resy/sign` seam (`Signer` interface +
+  `Noop` default + `Subprocess` wrapper) plus a sign-and-retry
+  envelope on `/3/details` and `/3/book`. Decision: subprocess
+  wrapper, not Go port — the named upstream
+  (`mvanhorn/cli-printing-press`) turned out to be a CLI generator,
+  not a Resy signing toolkit, so the seam-with-pluggable-binary is
+  the durable deliverable. See [anti-bot.md](anti-bot.md).
+
 ## Phase 1.5 — open
 
 The visible gaps before this is "really done."
 
 ### Open
-
-- **R7: printing-press integration** (resy-snipe-ou3, P2)
-  PerimeterX-aware signing for `/3/book` etc. Currently
-  `ErrAntiBotChallenge` is terminal; this would make it a transient
-  the adapter recovers from. See [anti-bot.md](anti-bot.md).
-  *Decision pending*: subprocess vs Go port of printing-press.
 
 - **Doc refresh** (resy-snipe-kol, P2)
   This doc tree. ←[meta]
