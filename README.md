@@ -74,6 +74,10 @@ goes through one error taxonomy.
 
 ## Quick start
 
+> **In a hurry?** [`docs/getting-started.md`](docs/getting-started.md) is
+> the five-minute walkthrough including troubleshooting and common flag
+> combos. The summary below is the same content compressed.
+
 ```bash
 # 1. Build
 just build               # → bin/resy-snipe
@@ -175,6 +179,7 @@ to work. If something here disagrees with the code, fix one or the
 other — don't leave the contradiction.
 
 - [docs/README.md](docs/README.md) — index & reading order
+- [docs/getting-started.md](docs/getting-started.md) — five-minute clone-to-snipe walkthrough
 - [docs/architecture.md](docs/architecture.md) — package responsibilities, deps graph
 - [docs/state-machine.md](docs/state-machine.md) — status diagram + transition rules
 - [docs/release-strategies.md](docs/release-strategies.md) — explicit / discovered / continuous

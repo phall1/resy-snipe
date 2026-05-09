@@ -12,6 +12,7 @@ import (
 
 	"resy-snipe/internal/domain"
 	"resy-snipe/internal/providers"
+	"resy-snipe/internal/resy/sign"
 )
 
 // signRetryFloor is the bounded backoff between the first
@@ -56,6 +57,18 @@ func (c *Client) doSignedAndRetry(
 	if cls == nil || !errors.Is(cls, providers.ErrAntiBotChallenge) {
 		// Either success or some other classified failure — let the caller
 		// run the canonical classify() for itself; we just return raw.
+		return body, resp, nil
+	}
+
+	// Optimisation: when no real Signer is wired, the retry is
+	// guaranteed to send an *identical* request (Noop.Reset is a no-op,
+	// Noop.Sign returns the same empty Headers). The only effect of
+	// retrying would be doubling our anti-bot rate-limit pressure with
+	// no chance of recovery. Short-circuit: surface the upstream
+	// response unchanged so the caller's classify() yields
+	// ErrAntiBotChallenge on the first hit, matching pre-R7 behavior
+	// for users who haven't opted into a signer.
+	if _, isNoop := c.signer.(sign.Noop); isNoop {
 		return body, resp, nil
 	}
 

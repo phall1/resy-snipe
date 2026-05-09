@@ -284,10 +284,65 @@ func TestSecondAntiBotChallengeIsTerminal(t *testing.T) {
 	}
 }
 
+// TestSignerHeadersRideIntoFind is the equivalent of the details/book
+// header test for /4/find. R7 originally only signed details + book;
+// the post-merge fix routes /4/find through the sign envelope too
+// because Find is the highest-volume polling endpoint and the one
+// PerimeterX watches most aggressively.
+func TestSignerHeadersRideIntoFind(t *testing.T) {
+	t.Parallel()
+
+	var findHdr atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/4/find" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		findHdr.Store(r.Header.Clone())
+		_, _ = io.WriteString(w, `{"results":{"venues":[]}}`)
+	}))
+	defer srv.Close()
+
+	fake := clock.NewFake(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))
+	signer := &fakeSigner{headers: sign.Headers{
+		"X-Px-Foo":       "bar",
+		"x-resy-rotated": "abc",
+	}}
+	c := signedClient(t, srv, signer, fake)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// We expect ErrInventoryEmpty because the fixture returns no
+	// venues — the point is the headers, not the result shape.
+	_, _ = c.Find(ctx, providers.FindRequest{
+		Venue:     domain.VenueRef{Provider: "resy", Ref: "38660"},
+		Date:      domain.NewDate(2026, time.June, 1),
+		PartySize: 2,
+	})
+
+	fh, _ := findHdr.Load().(http.Header)
+	if fh == nil {
+		t.Fatal("/4/find was never called")
+	}
+	if fh.Get("X-Px-Foo") != "bar" {
+		t.Errorf("/4/find missing x-px-foo: %q", fh.Get("X-Px-Foo"))
+	}
+	if fh.Get("X-Resy-Rotated") != "abc" {
+		t.Errorf("/4/find missing x-resy-rotated: %q", fh.Get("X-Resy-Rotated"))
+	}
+	if signer.signCalls.Load() < 1 {
+		t.Errorf("Sign was not called for /4/find (calls=%d)", signer.signCalls.Load())
+	}
+}
+
 // TestNoopSignerLeavesBehaviorUnchanged is the regression guard for
 // the "Noop is the default" contract. With no WithSigner option, the
-// classifier still surfaces ErrAntiBotChallenge on the first 403, no
-// retry is attempted, and the existing test fixtures keep passing.
+// classifier surfaces ErrAntiBotChallenge on the first 403 and the
+// adapter does NOT retry — the retry would be byte-for-byte identical
+// (Noop.Reset is a no-op, Noop.Sign returns empty headers), so doing
+// it would just double rate-limit pressure on users without a real
+// signer for zero recovery benefit.
 func TestNoopSignerLeavesBehaviorUnchanged(t *testing.T) {
 	t.Parallel()
 	var hits atomic.Int32
@@ -312,11 +367,9 @@ func TestNoopSignerLeavesBehaviorUnchanged(t *testing.T) {
 	if !errors.Is(err, providers.ErrAntiBotChallenge) {
 		t.Fatalf("err = %v, want ErrAntiBotChallenge", err)
 	}
-	// Noop.Reset is a true no-op, but the adapter still calls it. The
-	// retry then re-hits the 403, so total hits == 2. (Noop preserves
-	// header behavior, but the *retry* is the adapter's job, not the
-	// signer's. This documents that contract.)
-	if got := hits.Load(); got != 2 {
-		t.Errorf("hits: %d want 2 (initial + retry under Noop)", got)
+	// Pre-R7 contract: a 403 fires exactly one request. The Noop
+	// short-circuit in doSignedAndRetry preserves that.
+	if got := hits.Load(); got != 1 {
+		t.Errorf("hits: %d want 1 (Noop must skip the retry)", got)
 	}
 }

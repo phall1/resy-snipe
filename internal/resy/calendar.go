@@ -52,7 +52,10 @@ func (c *Client) Calendar(
 		"end_date":   {r.End.String()},
 	}
 
-	body, resp, err := c.do(ctx, http.MethodGet, "/4/venue/calendar", q, nil, "")
+	// /4/venue/calendar is the DiscoveredRelease polling endpoint and
+	// shares Find's anti-bot exposure under heavy load, so it routes
+	// through the sign+retry envelope. GET is idempotent.
+	body, resp, err := c.doSignedAndRetry(ctx, http.MethodGet, "/4/venue/calendar", q, nil, "", nil)
 	if err != nil {
 		return providers.Calendar{}, fmt.Errorf("resy.Calendar: %w", err)
 	}
