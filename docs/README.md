@@ -6,6 +6,10 @@ does it that way and *what stays true* across changes.
 
 ## Reading order
 
+**If you just want to use the binary**: jump to
+**[getting-started.md](getting-started.md)** — five-minute walkthrough
+from clone to live snipe, with troubleshooting.
+
 If you're new to the codebase, read in this order:
 
 1. **[architecture.md](architecture.md)** — packages, dependency graph,

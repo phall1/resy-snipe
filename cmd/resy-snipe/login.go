@@ -260,9 +260,16 @@ func openSnipeBackend(ctx context.Context, logger *slog.Logger, clk clock.Clock)
 // RESY_SNIPE_SIGNER_BIN, or nil when the env var is unset. A nil
 // return tells openSnipeBackend to skip WithSigner entirely so the
 // Client's default sign.Noop stays in place.
+//
+// Either branch logs at info level so a user reading the snipe boot
+// output can always tell which signer is active without trawling
+// `env`. The unwired-case message includes the env var name so
+// enabling signing is one grep away.
 func buildSigner(logger *slog.Logger, clk clock.Clock) sign.Signer {
 	bin := os.Getenv(signerBinEnv)
 	if bin == "" {
+		logger.Info("anti-bot signer: noop (set "+signerBinEnv+" to enable per-call signing)",
+			slog.String("signer", "noop"))
 		return nil
 	}
 	s, err := sign.NewSubprocess(sign.SubprocessConfig{
@@ -276,7 +283,8 @@ func buildSigner(logger *slog.Logger, clk clock.Clock) sign.Signer {
 			slog.String("err", err.Error()))
 		return nil
 	}
-	logger.Info("anti-bot signer wired",
+	logger.Info("anti-bot signer: subprocess",
+		slog.String("signer", "subprocess"),
 		slog.String("bin", bin))
 	return s
 }

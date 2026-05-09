@@ -58,7 +58,12 @@ func (c *Client) Find(ctx context.Context, req providers.FindRequest) ([]provide
 		}
 	}
 
-	body, resp, err := c.do(ctx, http.MethodGet, "/4/find", q, nil, authToken)
+	// /4/find is the highest-volume polling endpoint and the one
+	// PerimeterX watches most aggressively (per docs/anti-bot.md), so
+	// it routes through the sign+retry envelope alongside /3/details
+	// and /3/book. GET is idempotent — a retry after Reset cannot
+	// create duplicate state.
+	body, resp, err := c.doSignedAndRetry(ctx, http.MethodGet, "/4/find", q, nil, authToken, nil)
 	if err != nil {
 		return nil, fmt.Errorf("resy.Find: %w", err)
 	}

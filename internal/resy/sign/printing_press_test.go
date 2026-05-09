@@ -52,7 +52,12 @@ func TestSubprocessSignParsesHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSubprocess: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling: each test spawns real /bin/sh subprocesses, and
+	// under heavy parallel load (go test -count=10) fork+exec can take
+	// several seconds on macOS. The 5s default was tight enough to
+	// flake under contention; this is a generous deadline that still
+	// catches a genuinely-stuck subprocess.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	h, err := s.Sign(ctx, "/3/details")
 	if err != nil {
@@ -87,7 +92,12 @@ printf '{"headers":{"n":"%s"}}' "$n"
 	if err != nil {
 		t.Fatalf("NewSubprocess: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling: each test spawns real /bin/sh subprocesses, and
+	// under heavy parallel load (go test -count=10) fork+exec can take
+	// several seconds on macOS. The 5s default was tight enough to
+	// flake under contention; this is a generous deadline that still
+	// catches a genuinely-stuck subprocess.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	first, err := s.Sign(ctx, "/3/details")
@@ -125,7 +135,12 @@ printf '{"headers":{"n":"%s"}}' "$n"
 	if err != nil {
 		t.Fatalf("NewSubprocess: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling: each test spawns real /bin/sh subprocesses, and
+	// under heavy parallel load (go test -count=10) fork+exec can take
+	// several seconds on macOS. The 5s default was tight enough to
+	// flake under contention; this is a generous deadline that still
+	// catches a genuinely-stuck subprocess.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	first, err := s.Sign(ctx, "/3/details")
@@ -159,7 +174,12 @@ func TestSubprocessSignNonZeroExitErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSubprocess: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling: each test spawns real /bin/sh subprocesses, and
+	// under heavy parallel load (go test -count=10) fork+exec can take
+	// several seconds on macOS. The 5s default was tight enough to
+	// flake under contention; this is a generous deadline that still
+	// catches a genuinely-stuck subprocess.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, err := s.Sign(ctx, "/3/details"); err == nil {
 		t.Fatal("expected error from non-zero exit")
@@ -177,7 +197,12 @@ func TestSubprocessSignParseErrorsBubble(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSubprocess: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// 30s ceiling: each test spawns real /bin/sh subprocesses, and
+	// under heavy parallel load (go test -count=10) fork+exec can take
+	// several seconds on macOS. The 5s default was tight enough to
+	// flake under contention; this is a generous deadline that still
+	// catches a genuinely-stuck subprocess.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if _, err := s.Sign(ctx, "/3/details"); err == nil {
 		t.Fatal("expected parse error")
