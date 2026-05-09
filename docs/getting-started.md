@@ -81,40 +81,37 @@ reservations), everything else unwinds in <5s.
 
 ## 5. Anti-bot signing (optional, peak-load only)
 
-For 99% of snipes you don't need this. Only worry about it if Resy
+For most snipes you don't need this. Only worry about it if Resy
 returns `provider: anti-bot challenge` errors — typically only on
 the most-watched midnight drops at the highest-demand venues.
 
-If you hit it, point the binary at a signing tool:
+If you hit it, the recommended path is the bundled
+[`signers/obscura-resy.sh`](../signers/obscura-resy.sh) wrapper around
+[Obscura](https://github.com/h4ckf0r0day/obscura), an open-source Rust
+headless browser that runs PerimeterX's JavaScript and harvests the
+cookies it sets:
 
 ```bash
-export RESY_SNIPE_SIGNER_BIN=/path/to/your/signer
+# 1. Install Obscura (Apple Silicon shown; see signers/README.md for
+#    Linux + Intel)
+curl -LO https://github.com/h4ckf0r0day/obscura/releases/latest/download/obscura-aarch64-macos.tar.gz
+tar xzf obscura-aarch64-macos.tar.gz
+sudo mv obscura /usr/local/bin/
+
+# 2. Verify the script works standalone
+./signers/obscura-resy.sh sign
+
+# 3. Wire into resy-snipe
+export RESY_SNIPE_SIGNER_BIN=$PWD/signers/obscura-resy.sh
 bin/resy-snipe -user … -snipe-time 00:00 …
 ```
 
-The boot log will confirm: `anti-bot signer: subprocess bin=…`.
+The boot log will confirm:
+`anti-bot signer: subprocess bin=…/obscura-resy.sh`.
 
-The signing binary contract is documented in
-[`internal/resy/sign/doc.go`](../internal/resy/sign/doc.go) and
-[anti-bot.md](anti-bot.md). Today no upstream tool ships a drop-in
-signer — see the work-items doc.
-
-A demo signer (placeholder headers, **does not actually defeat
-PerimeterX**) for testing the wiring:
-
-```sh
-cat <<'EOF' > /tmp/demo-signer.sh
-#!/bin/sh
-case "$1" in
-  reset) exit 0 ;;
-  sign)  echo '{"headers":{"x-px-cookie-1":"demo","x-resy-rotated-token":"demo"}}' ;;
-esac
-EOF
-chmod +x /tmp/demo-signer.sh
-
-RESY_SNIPE_SIGNER_BIN=/tmp/demo-signer.sh \
-  bin/resy-snipe -user you@example.com -snipe-time 00:00 …
-```
+For the deeper "what is a signer / why does this exist" explanation,
+see [signers.md](signers.md). For tuning + adding your own signer,
+see [`signers/README.md`](../signers/README.md).
 
 ## Troubleshooting
 

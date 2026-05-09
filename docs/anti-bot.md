@@ -108,7 +108,7 @@ path's bootstrap.
 
 Two factors drove this:
 
-1. **The named upstream tool is something different**.
+1. **The originally named upstream is something different**.
    [`mvanhorn/cli-printing-press`](https://github.com/mvanhorn/cli-printing-press)
    is a CLI generator (it prints token-efficient Go CLIs from
    APIs), not a Resy / PerimeterX signing toolkit. There is no
@@ -116,15 +116,28 @@ Two factors drove this:
    imagined doesn't exist at that URL.
 2. **The seam is the deliverable**. With a generic subprocess
    wrapper plus a documented JSON wire format, the user can drop in
-   any binary that produces signing headers (a Node.js script that
-   solves the px challenge, a Python tool that mints `x-resy-rotated`,
-   even a hand-rolled Go binary) without us picking a winner. The
-   seam outlasts any specific upstream.
+   any binary that produces signing headers without us picking a
+   winner. The seam outlasts any specific upstream.
 
 So the production default is `sign.Noop` (no behavior change from
 pre-R7), and the `sign.Subprocess` wrapper is the production-ready
-hook waiting for a binary to point at. When a real upstream lands,
-the env var is the only knob.
+hook waiting for a binary to point at. The env var is the only knob.
+
+### Recommended signer: Obscura
+
+[`signers/obscura-resy.sh`](../signers/obscura-resy.sh) wraps
+[Obscura](https://github.com/h4ckf0r0day/obscura) — an open-source
+Apache-2.0 Rust headless browser engine with built-in stealth mode
+(navigator.webdriver=undefined, fingerprint randomization, native-
+function masking). Obscura runs Resy's PerimeterX challenge
+JavaScript in V8, lets it set cookies, and the script harvests
+`document.cookie` as a `Cookie:` header. ~70 MB binary, ~85 ms page
+load, 30 MB resident. See [signers/README.md](../signers/README.md)
+for install + usage.
+
+This is the recommended path for users who actually need anti-bot
+recovery. For the deeper explanation (what a signer is, why it lives
+outside the Go binary, when you need one), see [signers.md](signers.md).
 
 ### Runtime requirements
 
