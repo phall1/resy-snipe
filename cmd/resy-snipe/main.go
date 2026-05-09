@@ -25,9 +25,19 @@ func main() {
 }
 
 // run parses CLI flags (and optionally walks the interactive prompt
-// flow), assembles a domain.Intent, and — for now — emits the assembled
-// Intent through the structured logger. engine.Run wiring lands in a
-// downstream task.
+// flow), assembles a domain.Intent, and dispatches to one of three
+// paths:
+//
+//  1. `resy-snipe login …` — interactive credential capture, persists a
+//     session row, and exits.
+//  2. `resy-snipe …` with -user — full snipe lifecycle: open the store,
+//     load the persisted session, build the engine, subscribe the
+//     stdout notifier, run the chosen release strategy, and (on
+//     Awaiting) drive the booking race. Exits non-zero unless the snipe
+//     terminates in StatusBooked.
+//  3. `resy-snipe …` without -user — dry-run preview that logs the
+//     assembled Intent and returns. Useful for validating the flag
+//     surface without touching the network or risking a misfire.
 //
 // run is split out from main so it can be exercised in tests without
 // touching real os.Exit / os.Args / os.Stderr / os.Stdin.
@@ -85,40 +95,44 @@ func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) erro
 		slog.String("intent_hash", string(intent.Hash())),
 	)
 
-	// Construct the user-facing notifier. The Notifier interface is the
-	// seam where SMS / iMessage / chat-bot frontends will plug in; here
-	// we wire the Phase 1 stdout impl. The notifier is intentionally
-	// instantiated even though no engine.Run wiring exists yet — that
-	// integration lands in a downstream task. Holding the reference
-	// proves the construction is side-effect-free for tests that
-	// exercise run() without a TTY.
-	//
-	// TODO(engine-integration): once the engine exposes its lifecycle
-	// event stream, subscribe here and forward to notifier.Transition /
-	// notifier.Result. Today the snipe-running path is still a no-op.
-	_ = newCLINotifier(os.Stdout, clk)
-
-	// Session load: when the user passed -user, look up the persisted
-	// session before handing off to the engine. ErrNotFound /
-	// ErrSessionExpired both surface as the actionable
-	// "run 'resy-snipe login' first" message — the spec is explicit
-	// that an expired session must NOT silently re-login mid-snipe.
-	//
-	// When -user is empty we skip this step so the existing flag-only
-	// invocation paths (and the ones the README documents today) keep
-	// working. Engine wiring in a downstream task will tighten this.
-	if strings.TrimSpace(opts.user) != "" {
-		ctx := context.Background()
-		client, cleanup, err := openCLIClient(ctx, logger, clk)
-		if err != nil {
-			return fmt.Errorf("snipe bootstrap: %w", err)
-		}
-		defer func() { _ = cleanup() }()
-		if _, err := loadSessionForSnipe(ctx, client, domain.UserID(opts.user), logger); err != nil {
-			return err
-		}
+	// No -user: dry-run preview path. We log the assembled Intent and
+	// exit. This is intentional — running an end-to-end snipe without
+	// an explicit user is too easy to do by accident, and silently
+	// using whichever session happens to be in the store is exactly
+	// the kind of footgun the spec calls out. The user confirms the
+	// account by passing -user; without it, this binary will not
+	// touch the network.
+	if strings.TrimSpace(opts.user) == "" {
+		logger.Info("dry-run: pass -user <email> to enable the live snipe path")
+		return nil
 	}
 
+	parent, stopSignals := installSignalCancel(context.Background())
+	defer stopSignals()
+
+	rclient, sqlStore, cleanup, err := openSnipeBackend(parent, logger, clk)
+	if err != nil {
+		return fmt.Errorf("snipe bootstrap: %w", err)
+	}
+	defer func() { _ = cleanup() }()
+
+	sess, err := loadSessionForSnipe(parent,
+		&clientAdapter{inner: rclient}, domain.UserID(opts.user), logger)
+	if err != nil {
+		return err
+	}
+
+	notifier := newCLINotifier(os.Stdout, clk)
+	defer func() { _ = notifier.Close() }()
+
+	provider := &providerAdapter{Client: rclient}
+	finalStatus, snipeErr := runSnipeFn(parent, intent, sess, sqlStore, provider, notifier, logger, clk)
+	if snipeErr != nil {
+		return snipeErr
+	}
+	if finalStatus != domain.StatusBooked {
+		return fmt.Errorf("snipe did not book (final status: %s)", finalStatus)
+	}
 	return nil
 }
 

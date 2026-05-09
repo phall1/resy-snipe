@@ -208,3 +208,28 @@ func openCLIClient(ctx context.Context, logger *slog.Logger, clk clock.Clock) (*
 	c := resy.NewClient(logger, clk, resy.WithStore(newSessionStoreAdapter(sqlStore)))
 	return &clientAdapter{inner: c}, db.Close, nil
 }
+
+// openSnipeBackend wires the production stack the snipe path needs:
+// a *resy.Client (for Login/Find/Book and the SlotPreparer surface
+// the engine asserts at runtime) and the same *store.SQLiteStore
+// that the engine and the session adapter both read from. The single
+// underlying *sql.DB is shared across both — the cleanup closes it
+// exactly once.
+//
+// Distinct from openCLIClient because the snipe path needs the typed
+// Resy client and the SQL store handle directly (one to wrap as the
+// providers.Provider, the other to feed engine.New). Login does not
+// need either, so its bootstrap stays narrower.
+func openSnipeBackend(ctx context.Context, logger *slog.Logger, clk clock.Clock) (*resy.Client, *store.SQLiteStore, func() error, error) {
+	db, err := store.Open(ctx, "")
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("open db: %w", err)
+	}
+	if err := store.Migrate(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, nil, nil, fmt.Errorf("migrate db: %w", err)
+	}
+	sqlStore := store.NewSQLiteStore(db)
+	c := resy.NewClient(logger, clk, resy.WithStore(newSessionStoreAdapter(sqlStore)))
+	return c, sqlStore, db.Close, nil
+}

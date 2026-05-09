@@ -19,6 +19,8 @@ import (
 
 	"resy-snipe/internal/clock"
 	"resy-snipe/internal/domain"
+	"resy-snipe/internal/notify"
+	"resy-snipe/internal/providers"
 	"resy-snipe/internal/resy"
 	"resy-snipe/internal/store"
 )
@@ -418,6 +420,11 @@ func TestRun_SnipeWithUserFlag_ExpiredSession(t *testing.T) {
 // TestRun_SnipeWithUserFlag_LoadsPersistedSession is the happy-path
 // half of the same acceptance criterion: when a valid (non-expired)
 // session is in the store, the snipe path proceeds without error.
+//
+// We stub runSnipeFn so the test stays focused on the session-load
+// semantics. The full engine wiring is exercised in snipe_test.go
+// (TestRunSnipe_EndToEnd) where a fake provider drives a deterministic
+// booking race.
 func TestRun_SnipeWithUserFlag_LoadsPersistedSession(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", dir)
@@ -447,9 +454,24 @@ func TestRun_SnipeWithUserFlag_LoadsPersistedSession(t *testing.T) {
 		"-snipe-time", "00:00",
 		"-user", "u@x.io",
 	}
+
+	prev := runSnipeFn
+	t.Cleanup(func() { runSnipeFn = prev })
+	var called atomic.Int32
+	runSnipeFn = func(_ context.Context, _ domain.Intent, sess providers.Session, _ store.Store, _ providers.Provider, _ notify.Notifier, _ *slog.Logger, _ clock.Clock) (domain.Status, error) {
+		called.Store(1)
+		if sess == nil {
+			t.Error("runSnipeFn: nil session — load failed silently")
+		}
+		return domain.StatusBooked, nil
+	}
+
 	var out bytes.Buffer
 	if err := run(args, strings.NewReader(""), io.Discard, clock.NewFake(fixedNow)); err != nil {
 		t.Fatalf("run with valid session: %v (out=%q)", err, out.String())
+	}
+	if called.Load() != 1 {
+		t.Error("runSnipeFn was not invoked — snipe path skipped")
 	}
 }
 
