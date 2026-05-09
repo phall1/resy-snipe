@@ -1,168 +1,204 @@
 # resy-snipe
 
-A Go CLI that checks Resy for availability at a target venue/date/party size, then attempts to book matching time + seating/table-type options at a scheduled "snipe" time. It supports both flag-driven usage and an interactive prompt mode.
+A typed, observable, race-and-cancel reservation sniper for Resy.
+Single-binary Go CLI. Every line of orchestration is on the same
+state machine; every state change is persisted; every external call
+goes through one error taxonomy.
 
-Important note (ethics / ToS): This tool automates interactions with Resy endpoints and may violate Resy's terms, rate limits, or acceptable-use policies. Use responsibly, keep request volume low, and only for accounts/venues you're authorized to book.
+> **Ethics & ToS**: this tool automates Resy endpoints. It can violate
+> rate limits and acceptable-use. Use it for accounts and venues you
+> are authorized to book. Do not point it at venues you do not have a
+> personal stake in.
 
-## Features
-- CLI flags for date, party size, venue ID, desired reservation times, seating/table types, and the snipe schedule.
-- Interactive mode (`-interactive`) that prompts you through all inputs (with defaults).
-- Time + table-type matching: provide one or more reservation times and (optionally) one or more seating/table types; the tool builds a list of candidate combinations.
-- Reservation discovery loop with a short retry interval (10ms between attempts).
-- Concurrent booking attempts: if multiple candidate config tokens are found, the workflow tries booking them concurrently.
-
-## Demo
-![Demo](demo.gif)
-
-## Requirements
-- Go 1.20+
-- A Resy account with valid tokens:
-  - `RESY_API_KEY`
-  - `RESY_AUTH_TOKEN`
-
-## Setup
-1) Export credentials:
-```bash
-export RESY_API_KEY="your_api_key"
-export RESY_AUTH_TOKEN="your_auth_token"
+```
+              ┌────────────┐
+              │  CLI flags │
+              │ + interactive
+              └─────┬──────┘
+                    ▼
+              ┌────────────┐
+              │  Intent    │ ── content-addressed by Hash() ──┐
+              └─────┬──────┘                                  │
+                    ▼                                         ▼
+        ┌────────────────────┐                       ┌────────────────┐
+        │ engine.Submit/Run  │ ◀──── providers ─────▶│  resy.Client   │
+        │  state machine +   │      Provider seam    │  + SlotPreparer
+        │  release strategy  │                       └────────────────┘
+        └─────┬──────────────┘                                ▲
+              │ events                                        │ HTTP
+              ▼                                               ▼
+        ┌────────────────────┐                       ┌────────────────┐
+        │ store.Store (SQLite, WAL)                 │  api.resy.com  │
+        │  snipes, events, sessions, observed releases             │
+        └────────────────────┘                       └────────────────┘
+              │
+              ▼
+        ┌────────────────────┐
+        │ engine.Subscribe   │ ─────▶ notify.Notifier (stdout, future SMS/iMessage)
+        └────────────────────┘
 ```
 
-2) Run from the repo root:
+---
+
+## What it does
+
+- **Login + persisted session**. JWT decoded for exp; expired session
+  produces `run 'resy-snipe login' first` instead of mid-snipe failure.
+  Session lives in `~/.local/share/resy-snipe/db.sqlite` (or
+  `XDG_DATA_HOME`).
+- **Three release strategies**:
+  - **Explicit** — wake up at a known wall-clock time (e.g. midnight).
+  - **Discovered** — poll Resy's calendar between `ProbeFrom` and
+    `ProbeUntil`; the first time the target date appears available is
+    the release moment, and we record the wall-clock-of-day so the next
+    snipe for the same venue defaults to Explicit.
+  - **Continuous** — poll Find at the engine's PollFloor until a slot
+    appears or `Until` elapses.
+- **Race-and-cancel booking**. PrepareSlot (`/3/details`) is serialized
+  across candidates so we don't burn book_tokens we won't use; Confirm
+  (`/3/book`) races in parallel goroutines under a shared cancellable
+  context. The first successful Confirm cancels its siblings.
+- **Graceful shutdown**. SIGINT/SIGTERM cancel the parent context.
+  In-flight `/3/book` calls are detached from cancellation so we never
+  end up with a confirmed-but-orphaned reservation; everything else
+  unwinds cleanly within 5 s.
+- **One error taxonomy**. Every Resy HTTP failure is classified into
+  `providers.Err{AuthExpired,MFARequired,BookTokenExpired,SlotTaken,
+  RateLimited,AntiBotChallenge,InventoryEmpty}` so engine code never
+  string-matches a body.
+- **Idempotency** on `/3/book`. Each attempt sends an
+  `X-Resy-Idempotency-Key` derived from `sha256(intent_hash, slot
+  payload, attempt)`. A retry with the same `attempt` cannot double-book.
+
+---
+
+## Quick start
+
 ```bash
-go run .
+# 1. Build
+just build               # → bin/resy-snipe
+
+# 2. Log in once. Persisted in the local SQLite store.
+bin/resy-snipe login
+
+# 3. Snipe at midnight tonight, Dead Rabbit, party of 2,
+#    7 days out, prefer 18:30 then 19:00.
+bin/resy-snipe \
+  -user phall@example.com \
+  -venue-id 38660 \
+  -res-times 18:30,19:00 \
+  -snipe-time 00:00
 ```
 
-If env vars are missing/empty, requests will fail because the API client reads keys directly from env vars at startup.
+Without `-user`, the binary stays in **dry-run preview** mode — it
+prints the assembled Intent and exits. This is intentional: silently
+sniping with whichever session happens to be in the store is exactly
+the kind of footgun the spec calls out.
 
-## Default behavior
-If you run with no flags:
-- Reservation date defaults to 7 days from now in America/New_York.
-- Party size defaults to 2.
-- Venue defaults to Dead Rabbit.
-- Reservation times default to whatever is in `ResTimeTypes` (currently `18:45:00`).
-- Snipe time defaults to `00:00` (midnight).
+---
 
-## CLI usage
-### Flags
-- `-interactive` Prompt for settings interactively.
-- `-date` Reservation date (YYYY-MM-DD).
-- `-party-size` Party size.
-- `-venue-id` Resy venue ID.
-- `-res-times` One or more desired times, comma-separated. Times are normalized to `HH:MM:SS`.
-- `-table-types` Optional seating/table types, comma-separated. Use `none` for any.
-- `-snipe-date` Date to perform the snipe (defaults to reservation date).
-- `-snipe-time` Time to perform the snipe (24h clock).
+## CLI surface
 
-### Examples
-Run at midnight tonight (local time), booking 7 days out (default date), Dead Rabbit, party of 2:
-```bash
-go run . -snipe-time 00:00
-```
+| Flag | Purpose |
+|---|---|
+| `-user <email>` | Required for the live snipe path. Selects the persisted session. |
+| `-venue-id <id>` | Resy venue id. Built-in shortcuts in interactive mode. |
+| `-date YYYY-MM-DD` | Reservation date. Defaults to `now+7d` in `America/New_York`. |
+| `-party-size <n>` | Defaults to 2. |
+| `-res-times "18:30,19:00"` | Preferred times, comma-separated. First match wins the race. |
+| `-table-types "Bar,Parlor"` | Optional. `none` accepts any. |
+| `-snipe-time 00:00` | Wall-clock release moment for `ExplicitRelease`. |
+| `-snipe-date YYYY-MM-DD` | Defaults to reservation date. |
+| `-release-strategy explicit\|discovered\|continuous` | Defaults to explicit when `-snipe-time` is set, otherwise discovered. |
+| `-retry-window 30m` | Polling envelope for Discovered/Continuous. |
+| `-log-level debug\|info\|warn\|error` | Defaults to info. |
+| `-interactive` | Walk the prompt flow. |
 
-Book a specific venue and date at 09:00, try multiple times:
-```bash
-go run . \
-  -date 2026-01-22 \
-  -party-size 2 \
-  -venue-id 466 \
-  -res-times "18:30,18:45,19:00" \
-  -table-types "Parlor,Bar" \
-  -snipe-date 2026-01-15 \
-  -snipe-time 09:00
-```
+Subcommands: `resy-snipe login` walks the credential capture +
+persistence flow and exits.
 
-Interactive prompt mode:
-```bash
-go run . -interactive
-```
-
-## Venue IDs
-The CLI prints a venue menu in interactive mode based on constants in config (you can still enter a custom venue ID).
-
-Current built-ins:
-- Dead Rabbit (`38660`)
-- Rubirosa (`466`)
-- Red Pearl (`69820`)
-- Rafs (`65679`)
-- Carbone (`6194`)
-- Don Angie (`1505`)
-- San Sabino (`78799`)
-- Gertrudes (`71935`)
-- Au Cheval (`5769`)
-- HOWOO (`86696`)
-
-To add more, extend the constants in `config/resy-config.go` and the `venueOptions` list in `resy-bot.go`.
+---
 
 ## Project layout
-- `resy-bot.go`: main CLI entrypoint (flags, interactive prompts, schedule, run workflow).
-- `config/resy-config.go`: environment-based auth keys, venue constants, default reservation details.
-- `resy/resy-api.go`: low-level HTTP requests to Resy endpoints (`/find`, `/details`, `/book`) plus headers.
-- `resy/resy-client.go`: parses find results into candidate booking config tokens, fetches booking details, books reservations.
-- `resy/resy-booking-workflow.go`: orchestration: find -> details -> book.
 
-## How it works
-1) Scheduling
-- The app computes a target `scheduledTime` from `-snipe-date` + `-snipe-time`, prints the sleep duration, and sleeps until that time.
-- If the scheduled time is in the past, the computed duration will be negative and the sleep will effectively be skipped.
+```
+cmd/resy-snipe/      CLI entry, flag parsing, interactive prompt,
+                     login subcommand, snipe lifecycle wiring,
+                     providerAdapter (resy.Client → providers.Provider).
 
-2) "Find" availability
-- At runtime, the workflow calls Resy "find" (`/4/find`) with date, party size, and venue.
-- The response is parsed into a structure mapping `start time -> table type -> config token`.
-- The client compares available slots against your requested reservation time/type list, building a queue of matching config tokens.
+internal/
+  domain/            Pure types: Status, Event, Intent, ReleaseStrategy
+                     (sealed union), SlotPayload (sealed union),
+                     transition table, idempotency key.
+  providers/         Cross-provider seam: Provider interface + sentinel
+                     error taxonomy. Engine depends only on this.
+  resy/              Provider implementation: typed HTTP client, login
+                     with MFA, calendar/find/details/book endpoints,
+                     anti-bot classifier, JWT-exp session.
+  store/             SQLite (modernc, WAL) + schema migrations + typed
+                     payload codec.
+  clock/             Clock interface + real + fake (drives tests).
+  engine/            State machine + scheduler (Clock.AfterFunc) +
+                     release-strategy loops + race-and-cancel booking +
+                     subscriber surface.
+  notify/            Notifier interface + stdout impl. Engine event
+                     stream lands here via cmd/'s notifierBridge.
+docs/                See docs/README.md.
+```
 
-3) "Details" and "Book"
-- For each candidate config token:
-  - Call `/3/details` to fetch `payment_method_id` and `book_token`.
-  - Call `/3/book` with `book_token` and the payment method payload.
+---
 
-4) Concurrency model
-- If multiple config tokens match, the workflow spins a goroutine per token and attempts booking concurrently.
+## Documentation
 
-## Configuration
-Edit `config/resy-config.go` to change defaults:
-- Default reservation date/time options: `ResTimeTypes`
-- Default venue / party size / date: `ReservationDetailss`
-- Default snipe time: `SnipeTimee`
+The `docs/` tree is the durable record of how this thing is supposed
+to work. If something here disagrees with the code, fix one or the
+other — don't leave the contradiction.
 
-## Retry tuning (important)
-There are two key retry-related behaviors in the current code:
-- The retry loop sleeps 10ms between attempts.
-- The retry window passed to `findReservations` is currently hard-coded to `2` inside the booking workflow (not the `Run(millisToRetry ...)` parameter).
+- [docs/README.md](docs/README.md) — index & reading order
+- [docs/architecture.md](docs/architecture.md) — package responsibilities, deps graph
+- [docs/state-machine.md](docs/state-machine.md) — status diagram + transition rules
+- [docs/release-strategies.md](docs/release-strategies.md) — explicit / discovered / continuous
+- [docs/invariants.md](docs/invariants.md) — load-bearing properties
+- [docs/laws.md](docs/laws.md) — project conventions (lint, layering, idioms)
+- [docs/anti-bot.md](docs/anti-bot.md) — what we detect, what we don't yet handle
+- [docs/state.md](docs/state.md) — current snapshot of what works, what's wired
+- [docs/work-items.md](docs/work-items.md) — pointer to beads + open epics
+- [docs/opentable-mapping.md](docs/opentable-mapping.md) — provider-interface stress test
 
-Because the retry stop condition is measured in milliseconds, a value of `2` means "retry for ~2ms total," which is effectively one quick attempt.
+---
 
-Recommended improvement: thread the intended retry duration through the workflow and pass a sensible window (for example, 30-120 seconds), and/or make it configurable via a CLI flag.
+## Build & test
 
-## Troubleshooting
-### "No Hits"
-The tool prints `No Hits` when it finds no matching slots for your requested time(s)/table type(s).
+```bash
+just build          # → bin/resy-snipe
+just test           # go test -race ./...
+just lint           # golangci-lint with the strict ruleset
+just gates          # build + test + custom invariants (no time.Now()
+                    # outside internal/clock; no map[string]any; etc.)
+```
 
-Common causes:
-- Too narrow reservation times (try a wider range).
-- Table types don't match the venue's returned types.
-- Retry window is too short (see Retry tuning above).
+The `gates` recipe is the ground truth for "is this branch shippable."
+CI runs the same thing. Pre-commit (lefthook) runs gofmt + govet + bd
+validation + gates + golangci-lint on every commit.
 
-### HTTP errors (401/403/429)
-- 401/403 typically indicates invalid/expired tokens or missing env vars. Tokens are read from `RESY_API_KEY` and `RESY_AUTH_TOKEN`.
-- 429 indicates rate limiting. Reduce request rate and widen your retry interval.
+---
 
-When non-OK responses occur, the code reads and prints response body details and returns an error.
+## Status
 
-### Negative "Sleeping for ..."
-If your `-snipe-date`/`-snipe-time` is in the past, the computed duration will be negative. The tool will proceed immediately because `time.Sleep(duration)` effectively does not delay.
+Phase 1 is complete: login, three release strategies, race-and-cancel
+booking, graceful shutdown, full state-machine persistence, end-to-end
+test coverage. The CLI snipe path is wired end-to-end — `resy-snipe -user
+… -snipe-time …` actually books.
 
-## Known limitations
-- Data race on booking result: concurrent goroutines write `resyToken` / `resyTokenErr` without synchronization; "last writer wins." Consider guarding with a mutex or returning the first successful booking.
-- Retry duration is not wired correctly: `Run(millisToRetry)` doesn't currently control the internal find retry window (hard-coded to 2).
-- Assumes at least one payment method: `getReservationDetails` uses the first payment method in the array without checking length.
+Open: anti-bot signing (printing-press integration) and a Phase 2
+daemon mode are tracked in [docs/work-items.md](docs/work-items.md).
 
-## Security tips
-- Never commit your `RESY_API_KEY` / `RESY_AUTH_TOKEN`. The app is already designed to read them from environment variables.
-- Consider using a local `.env` file + a loader (dotenv) for convenience (but keep it out of git).
+For project-state details and what's next, see [docs/state.md](docs/state.md).
 
-## Development ideas
-- Add a `-retry-ms` / `-retry-seconds` flag and plumb it correctly through `ResyBookingWorkflow` -> `ResyClient`.
-- Add structured logging (request IDs, status codes, elapsed time).
-- Add a "dry run" mode: find + details without booking.
-- Add backoff and jitter to respect rate limits.
-- Add deterministic selection (prefer earliest time, prefer specific table type, stop after first success).
+---
+
+## License & lineage
+
+Forked from a small reservation-sniping CLI; the entire architecture
+(state machine, provider seam, race-and-cancel, persisted store) is
+new. The legacy entry point lives in `_legacy/` for archaeology only.
