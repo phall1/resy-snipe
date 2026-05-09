@@ -25,6 +25,7 @@ If you're new to the codebase, read in this order:
 
 For specific topics:
 - **[anti-bot.md](anti-bot.md)** — Resy's defense surface and our gaps.
+- **[signers.md](signers.md)** — what a "signer" is, why it lives outside the Go binary, when you need one, and how to debug.
 - **[opentable-mapping.md](opentable-mapping.md)** — design exercise
   validating the Provider interface against a second concrete provider.
 - **[state.md](state.md)** — what's wired and what's not, right now.

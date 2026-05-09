@@ -99,23 +99,34 @@ prints the assembled Intent and exits. This is intentional: silently
 sniping with whichever session happens to be in the store is exactly
 the kind of footgun the spec calls out.
 
-### Anti-bot signing (optional)
+### Anti-bot signing (optional, peak-load only)
 
 The Resy adapter has a pluggable seam for PerimeterX-aware signing.
-Without configuration, it's a no-op and the binary behaves exactly as
-the docs above describe. If you have a signing binary that produces
-the headers Resy's anti-bot pipeline expects, point at it via:
+By default it's a no-op (binary behaves as above). When a high-demand
+snipe starts returning `provider: anti-bot challenge` errors, wire in
+the bundled [Obscura](https://github.com/h4ckf0r0day/obscura)-based
+signer:
 
 ```bash
-export RESY_SNIPE_SIGNER_BIN=/path/to/your-signer
+# 1. Install obscura (Apple Silicon shown — see signers/README.md
+#    for Linux + Intel)
+curl -LO https://github.com/h4ckf0r0day/obscura/releases/latest/download/obscura-aarch64-macos.tar.gz
+tar xzf obscura-aarch64-macos.tar.gz && sudo mv obscura /usr/local/bin/
+
+# 2. Point resy-snipe at the bundled wrapper
+export RESY_SNIPE_SIGNER_BIN=$PWD/signers/obscura-resy.sh
 ```
 
-The binary is invoked once per `/3/details` and `/3/book` call as
-`<bin> sign --provider resy <path>`; it must write JSON to stdout in
-the form `{"headers": {"x-px-foo": "..."}}`. On a `403` anti-bot
-response the adapter calls `<bin> reset --provider resy` and retries
-the request once. See [docs/anti-bot.md](docs/anti-bot.md) for the
-full envelope.
+Obscura is an open-source Rust headless browser with stealth-mode
+fingerprint randomization. The wrapper script visits Resy under
+Obscura, lets PerimeterX's JavaScript run, and harvests the cookies
+PX sets as a `Cookie:` header for resy-snipe to attach to outbound
+calls. Apache 2.0, single binary, ~70 MB.
+
+For the deeper explanation see [`docs/signers.md`](docs/signers.md);
+for tuning + writing your own signer see
+[`signers/README.md`](signers/README.md); for the wire-format contract
+see [`docs/anti-bot.md`](docs/anti-bot.md).
 
 ---
 
@@ -185,7 +196,9 @@ other — don't leave the contradiction.
 - [docs/release-strategies.md](docs/release-strategies.md) — explicit / discovered / continuous
 - [docs/invariants.md](docs/invariants.md) — load-bearing properties
 - [docs/laws.md](docs/laws.md) — project conventions (lint, layering, idioms)
-- [docs/anti-bot.md](docs/anti-bot.md) — what we detect, what we don't yet handle
+- [docs/anti-bot.md](docs/anti-bot.md) — Resy's defense surface, the recovery path
+- [docs/signers.md](docs/signers.md) — what a signer is, when you need one, how to debug
+- [signers/README.md](signers/README.md) — bundled `obscura-resy.sh` setup + tuning
 - [docs/state.md](docs/state.md) — current snapshot of what works, what's wired
 - [docs/work-items.md](docs/work-items.md) — pointer to beads + open epics
 - [docs/opentable-mapping.md](docs/opentable-mapping.md) — provider-interface stress test
