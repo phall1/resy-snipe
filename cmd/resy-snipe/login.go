@@ -110,6 +110,10 @@ func fromStoreRow(s store.SessionRow) resy.SessionRow {
 //     forwards the message verbatim so the user sees an actionable
 //     diagnostic rather than a silent retry loop.
 //
+// The ctx may carry no deadline — the prompt loop is interactive,
+// and the resy adapter applies a per-call timeout internally for
+// each HTTP round trip (see invariant I-11).
+//
 // stdin must be a fresh reader; a bufio.Reader is wrapped over it so
 // the existing promptRaw helper from intent.go works unchanged. out
 // is where prompts and confirmation messages are written.

@@ -143,13 +143,23 @@ transports (network, disk) wrap the call site, not the engine.
 The stdout impl is mutex-serialized stdout writes — fast enough that
 in-line delivery is safe.
 
-## Ctx must have a deadline at the HTTP boundary
+## Every HTTP call has a deadline
 
-**I-11**: `resy.Client.do` rejects a context without a deadline with
-`errMissingCtxDeadline`.
+**I-11**: every Resy HTTP request executes under a context with a
+deadline. If the caller's context already carries one, that deadline
+is honored; otherwise `resy.Client.do` derives a 30s ceiling
+(`defaultPerCallTimeout`) before issuing the request.
 
-Enforced by [`resy/client.go:do`](../internal/resy/client.go).
+Enforced by
+[`resy/client.go:doWithExtraHeaders`](../internal/resy/client.go) plus
+the hard `http.Client.Timeout: 30 * time.Second` on the underlying
+client (`client.go:NewClient`).
 
 **Why it matters**: a misbehaving Resy server cannot stall the engine
-indefinitely. Every endpoint method either threads a parent deadline
-through or wraps with `context.WithTimeout`.
+indefinitely. The earlier "fail closed if the caller forgot a
+deadline" form of this invariant turned out to be brittle — engine
+code legitimately wants to pass a snipe-lifetime context, and the
+CLI's login subcommand has an interactive prompt loop where forcing
+a deadline races the typist. Deriving the per-call ceiling at the
+adapter boundary preserves the safety property without forcing every
+caller to know about it.

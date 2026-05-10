@@ -284,6 +284,45 @@ func TestSecondAntiBotChallengeIsTerminal(t *testing.T) {
 	}
 }
 
+// TestNoCallerDeadlineDoesNotFail is the regression guard for the
+// I-11 fix: callers (CLI login subcommand, engine code passing a
+// snipe-lifetime context) used to fail with "ctx has no deadline"
+// when their context lacked one. Now the resy adapter derives a per-
+// call deadline internally; the request must succeed normally.
+func TestNoCallerDeadlineDoesNotFail(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/4/find" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = io.WriteString(w, `{"results":{"venues":[]}}`)
+	}))
+	defer srv.Close()
+
+	c := resy.NewClient(slog.New(slog.DiscardHandler), clock.NewReal(),
+		resy.WithBaseURL(srv.URL),
+		resy.WithAPIKey("test"),
+		resy.WithHTTPClient(srv.Client()),
+		resy.WithUserAgent("test"),
+	)
+
+	// context.Background() — explicitly no deadline. Pre-fix this
+	// would return errMissingCtxDeadline; post-fix it succeeds.
+	_, err := c.Find(context.Background(), providers.FindRequest{
+		Venue:     domain.VenueRef{Provider: "resy", Ref: "38660"},
+		Date:      domain.NewDate(2026, time.June, 1),
+		PartySize: 2,
+	})
+	// ErrInventoryEmpty is the expected response shape for an empty-
+	// venues fixture; anything else (especially an "I-11" error) is
+	// a regression.
+	if err != nil && !errors.Is(err, providers.ErrInventoryEmpty) {
+		t.Fatalf("Find with no-deadline ctx should succeed (or return ErrInventoryEmpty); got: %v", err)
+	}
+}
+
 // TestSignerHeadersRideIntoFind is the equivalent of the details/book
 // header test for /4/find. R7 originally only signed details + book;
 // the post-merge fix routes /4/find through the sign envelope too
