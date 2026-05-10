@@ -31,6 +31,28 @@ For specific topics:
 - **[state.md](state.md)** — what's wired and what's not, right now.
 - **[work-items.md](work-items.md)** — open epics + how to find work.
 
+## v2 re-architecture (in progress)
+
+The current binary is a scheduled HTTP client that requires the user to
+be the planner (look up venue ids, compute snipe times, pick release
+strategies). v2 inverts that: the user states a Goal, the system
+resolves + plans + executes. The eventual deployment is a friends-and-
+family homelab daemon with both human (CLI/TUI) and agent (MCP)
+front-ends sharing one Service-layer interface.
+
+- **[v2/README.md](v2/README.md)** — v2 design tree index.
+- **[v2/design/overview.md](v2/design/overview.md)** — the whole
+  architecture in one diagram + 5 paragraphs.
+- **[v2/adr/](v2/adr/)** — twelve load-bearing decisions, one ADR each.
+- **[v2/milestones/](v2/milestones/)** — M1 (goal-driven CLI +
+  multi-user schema), M2 (daemon), M3 (MCP), M4 (TUI + notifications),
+  M5 (precision + polish).
+
+This `docs/` tree remains authoritative for the v1 code paths shipping
+today. v2 docs describe the target; when v2 lands, the v1 docs that no
+longer apply move into `v2/` (or are deleted) and the cross-references
+flip.
+
 ## Conventions for this tree
 
 - **Stable, not chronological**. Don't add dated entries. If a doc
