@@ -238,6 +238,40 @@ func TestEventsRoundTrip(t *testing.T) {
 	}
 }
 
+// TestUpsertSessionWithoutPriorUser is the regression guard for the
+// production login bug: UpsertSession must succeed even when no row
+// exists in users for that UserID. The resy adapter calls this on
+// first login and there's no separate "create user" step — the
+// implementation has to ensure-or-ignore the parent row in the same
+// transaction. Without that, sqlite returns SQLITE_CONSTRAINT_FOREIGNKEY
+// (787) and login fails with "FOREIGN KEY constraint failed".
+func TestUpsertSessionWithoutPriorUser(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	ctx := context.Background()
+
+	now := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
+	row := store.SessionRow{
+		UserID:    "fresh-user@example.com", // no prior row in users
+		Provider:  "resy",
+		JWT:       "fresh.jwt.tok",
+		ExpiresAt: now.Add(time.Hour),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.UpsertSession(ctx, row); err != nil {
+		t.Fatalf("UpsertSession on fresh user must succeed; got: %v", err)
+	}
+
+	got, err := s.GetSession(ctx, "fresh-user@example.com", "resy", now)
+	if err != nil {
+		t.Fatalf("GetSession after first-time upsert: %v", err)
+	}
+	if got.JWT != "fresh.jwt.tok" {
+		t.Errorf("JWT did not persist: %q", got.JWT)
+	}
+}
+
 func TestSessionsHappyPath(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)

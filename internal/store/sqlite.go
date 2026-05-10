@@ -425,7 +425,25 @@ func (s *SQLiteStore) ListEventsBySnipe(ctx context.Context, snipeID domain.Snip
 // Sessions --------------------------------------------------------------
 
 func (s *SQLiteStore) UpsertSession(ctx context.Context, sess SessionRow) error {
-	_, err := s.db.ExecContext(ctx, `
+	// sessions.user_id has a FK constraint to users.id (see
+	// migrations/0001_initial.sql). The session-only path the resy
+	// adapter calls during Login does not pass through any
+	// users-creating code, so we ensure-or-ignore the parent row in
+	// the same transaction. INSERT OR IGNORE is idempotent on the
+	// PRIMARY KEY collision and never overwrites a user's created_at.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("UpsertSession: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT OR IGNORE INTO users (id) VALUES (?)`,
+		string(sess.UserID)); err != nil {
+		return fmt.Errorf("UpsertSession: ensure user: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO sessions (user_id, provider, jwt, exp, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, provider) DO UPDATE SET
@@ -438,9 +456,12 @@ func (s *SQLiteStore) UpsertSession(ctx context.Context, sess SessionRow) error 
 		formatTime(sess.ExpiresAt),
 		formatTime(sess.CreatedAt),
 		formatTime(sess.UpdatedAt),
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("UpsertSession: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("UpsertSession: commit: %w", err)
 	}
 	return nil
 }
