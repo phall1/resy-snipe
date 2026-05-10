@@ -40,6 +40,9 @@ func (*fakeProvider) Ping(context.Context, providers.Session) error { return nil
 func (*fakeProvider) SearchVenues(context.Context, providers.Query) ([]domain.Venue, error) {
 	return nil, nil
 }
+func (*fakeProvider) ResolveVenue(context.Context, string, string) (domain.Venue, error) {
+	return domain.Venue{}, providers.ErrVenueNotFound
+}
 func (*fakeProvider) Book(context.Context, providers.Slot, providers.Session) (providers.Confirmation, error) {
 	return providers.Confirmation{}, errors.New("fake: Book not used")
 }

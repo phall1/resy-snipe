@@ -47,6 +47,9 @@ func classify(status int, body []byte) error {
 	if status == http.StatusGone {
 		return wrapWithBody(providers.ErrBookTokenExpired, status, body)
 	}
+	if status == http.StatusNotFound {
+		return wrapWithBody(providers.ErrVenueNotFound, status, body)
+	}
 	if status == http.StatusConflict {
 		return wrapWithBody(providers.ErrSlotTaken, status, body)
 	}

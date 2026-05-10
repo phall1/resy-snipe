@@ -135,6 +135,38 @@ type BookResponse struct {
 	ReservationID int64  `json:"reservation_id"`
 }
 
+// VenueResponse is the typed (and intentionally narrow) view of the
+// GET /3/venue response. The Resy payload is large — gallery URLs,
+// social links, hours-of-operation copy, and so on — so we only name
+// the fields the resolver actually consumes. Unrepresented keys stay
+// in the wire bytes and cost us nothing to ignore.
+//
+// VenueIdentBlock.Resy is the integer the rest of the system calls a
+// "venue ref"; the resolver stringifies it before populating Venue.Ref.
+//
+// VenueLocale.TimeZone arrives as a POSIX TZ string (e.g. "EST5EDT")
+// rather than the more familiar "America/New_York" IANA form. Go's
+// time.LoadLocation accepts both, so the resolver passes the value
+// through unchanged.
+type VenueResponse struct {
+	ID      VenueIdentBlock `json:"id"`
+	Name    string          `json:"name"`
+	URLSlug string          `json:"url_slug"`
+	Locale  VenueLocale     `json:"locale"`
+}
+
+// VenueIdentBlock is the cross-platform identifier bag Resy attaches to
+// every venue. Only the resy field matters to this codebase.
+type VenueIdentBlock struct {
+	Resy int64 `json:"resy"`
+}
+
+// VenueLocale carries currency and timezone metadata for the venue.
+type VenueLocale struct {
+	Currency string `json:"currency"`
+	TimeZone string `json:"time_zone"`
+}
+
 // CalendarRequest carries the query parameters for GET /4/venue/calendar.
 type CalendarRequest struct {
 	VenueID   string

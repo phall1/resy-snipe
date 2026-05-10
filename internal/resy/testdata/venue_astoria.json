@@ -1,0 +1,45 @@
+{
+  "config": {
+    "allow_bypass_payment_method": 1,
+    "allow_multiple_resys": 0,
+    "enable_discovery": 1,
+    "enable_invite": 1,
+    "enable_resypay": 0,
+    "hospitality_included": 0,
+    "experiences": false
+  },
+  "contact": {
+    "phone_number": "",
+    "url": "https://astoriadc.com/",
+    "menu_url": null
+  },
+  "id": {
+    "foursquare": "null",
+    "google": "ChIJV6E7A4u3t4kR_5p2Jx0dvTs",
+    "resy": 49716,
+    "fb_pixel": null
+  },
+  "locale": {
+    "currency": "USD",
+    "time_zone": "EST5EDT"
+  },
+  "location": {
+    "address_1": "1521 17th St. NW",
+    "address_2": "1521 17 St. NW",
+    "code": "dc",
+    "url_slug": "washington-dc",
+    "country": "United States",
+    "country_iso3166": "US",
+    "cross_street_1": "17th St. NW",
+    "cross_street_2": "Church St. NW",
+    "id": 5,
+    "latitude": 38.910540200597,
+    "locality": "Washington",
+    "longitude": -77.0382736480356,
+    "neighborhood": "DuPont Circle",
+    "postal_code": "20036",
+    "region": "DC"
+  },
+  "name": "Astoria DC",
+  "url_slug": "astoria-dc"
+}

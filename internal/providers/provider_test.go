@@ -24,6 +24,9 @@ func (stubProvider) Ping(context.Context, providers.Session) error { return nil 
 func (stubProvider) SearchVenues(context.Context, providers.Query) ([]domain.Venue, error) {
 	return nil, nil
 }
+func (stubProvider) ResolveVenue(context.Context, string, string) (domain.Venue, error) {
+	return domain.Venue{}, providers.ErrVenueNotFound
+}
 func (stubProvider) Calendar(context.Context, domain.VenueRef, providers.DateRange) (providers.Calendar, error) {
 	return providers.Calendar{}, nil
 }
@@ -46,6 +49,8 @@ func TestSentinelErrorsAreDistinct(t *testing.T) {
 		providers.ErrRateLimited,
 		providers.ErrAntiBotChallenge,
 		providers.ErrInventoryEmpty,
+		providers.ErrVenueNotFound,
+		providers.ErrParseFailure,
 	}
 	for i, a := range all {
 		for j, b := range all {
@@ -69,6 +74,8 @@ func TestSentinelClassificationThroughWrap(t *testing.T) {
 		providers.ErrRateLimited,
 		providers.ErrAntiBotChallenge,
 		providers.ErrInventoryEmpty,
+		providers.ErrVenueNotFound,
+		providers.ErrParseFailure,
 	}
 	for _, sentinel := range cases {
 		wrapped := fmt.Errorf("calling /3/book: %w", sentinel)

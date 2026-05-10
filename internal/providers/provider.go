@@ -117,6 +117,15 @@ type Provider interface {
 	Login(ctx context.Context, creds Credentials) (Session, error)
 	Ping(ctx context.Context, sess Session) error
 	SearchVenues(ctx context.Context, q Query) ([]domain.Venue, error)
+	// ResolveVenue maps a (slug, city) pair — the form a parsed Resy URL
+	// or a previously-cached resolution carries — to a fully-populated
+	// domain.Venue. Implementations hit the provider's per-venue
+	// metadata endpoint (Resy: GET /3/venue?url_slug=&location=).
+	//
+	// Returns ErrVenueNotFound, wrapped, when the provider replies that
+	// no such venue exists (typically HTTP 404). Other transit failures
+	// surface through the existing sentinel taxonomy.
+	ResolveVenue(ctx context.Context, slug, city string) (domain.Venue, error)
 	Calendar(ctx context.Context, ref domain.VenueRef, r DateRange) (Calendar, error)
 	Find(ctx context.Context, req FindRequest) ([]Slot, error)
 	Book(ctx context.Context, slot Slot, sess Session) (Confirmation, error)
@@ -160,4 +169,17 @@ var (
 	// no eligible slots. The engine loops in Awaiting/Finding until a
 	// slot appears or the policy times out.
 	ErrInventoryEmpty = errors.New("provider: inventory empty")
+
+	// ErrVenueNotFound indicates a ResolveVenue call hit the provider's
+	// per-venue metadata endpoint and was told the (slug, city) pair
+	// does not exist (Resy: HTTP 404). The resolver surfaces this to
+	// the caller so the CLI/MCP layer can prompt for disambiguation
+	// rather than retrying.
+	ErrVenueNotFound = errors.New("provider: venue not found")
+
+	// ErrParseFailure indicates an adapter received a transport-level
+	// success but could not decode the response body into the expected
+	// shape. It exists so engine/resolver code can branch on a
+	// classifiable parse error without string-matching JSON errors.
+	ErrParseFailure = errors.New("provider: parse failure")
 )
