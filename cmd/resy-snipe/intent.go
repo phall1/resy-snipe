@@ -13,44 +13,12 @@ import (
 	"resy-snipe/internal/domain"
 )
 
-// Legacy venue IDs preserved from _legacy/config/resy-config.go.bak as a
-// convenience list for the interactive prompt. Users can still enter any
-// custom venue id at the prompt.
-const (
-	venueDeadRabbit = 38660
-	venueRubirosa   = 466
-	venueRedPearl   = 69820
-	venueRafs       = 65679
-	venueCarbone    = 6194
-	venueDonAngie   = 1505
-	venueSanSabino  = 78799
-	venueGertrudes  = 71935
-	venueAuCheval   = 5769
-	venueHOWOO      = 86696
-)
-
-// venueOption is a built-in (Name, Resy venue id) pair shown by the
-// interactive prompt.
-type venueOption struct {
-	Name string
-	ID   int
-}
-
-// venueOptions is the convenience list of venues the interactive prompt
-// shows. The list is a presentation-only nicety: any numeric Resy venue
-// id is accepted at the prompt.
-var venueOptions = []venueOption{
-	{Name: "Dead Rabbit", ID: venueDeadRabbit},
-	{Name: "Rubirosa", ID: venueRubirosa},
-	{Name: "Red Pearl", ID: venueRedPearl},
-	{Name: "Rafs", ID: venueRafs},
-	{Name: "Carbone", ID: venueCarbone},
-	{Name: "Don Angie", ID: venueDonAngie},
-	{Name: "San Sabino", ID: venueSanSabino},
-	{Name: "Gertrudes", ID: venueGertrudes},
-	{Name: "Au Cheval", ID: venueAuCheval},
-	{Name: "HOWOO", ID: venueHOWOO},
-}
+// v1 had a hardcoded venue catalog here (Dead Rabbit/Rubirosa/Carbone/...
+// each with a baked-in Resy venue id). v2 resolves venues dynamically via
+// `resy-snipe venue resolve <url>` — see docs/v2/design/resolver.md. The
+// interactive prompt now only accepts a numeric venue id; users are
+// expected to look the id up with the resolver first. Inline name → id
+// resolution at the prompt is a future iteration.
 
 // release strategy enum values for the -release-strategy flag.
 const (
@@ -147,17 +115,17 @@ func parseFlags(args []string, out io.Writer) (cliOptions, error) {
 }
 
 // applyDefaults fills in any unset legacy flags with the legacy defaults
-// from _legacy/config/resy-config.go.bak (party size 2, Dead Rabbit,
-// 18:45:00, snipe date == reservation date, snipe time 00:00). The
-// reservation-date default is computed from the supplied now (passed
-// in for testability) rather than the wall clock so toIntent stays
-// deterministic.
+// from _legacy/config/resy-config.go.bak (party size 2, 18:45:00, snipe
+// date == reservation date, snipe time 00:00). The reservation-date
+// default is computed from the supplied now (passed in for testability)
+// rather than the wall clock so toIntent stays deterministic.
+//
+// v2 note: the venue id no longer has a default. Users must pass
+// -venue-id (looked up via `resy-snipe venue resolve <url>`); toIntent
+// surfaces "venue-id is required" when it's missing.
 func (o *cliOptions) applyDefaults(now time.Time) {
 	if o.partySize < 0 {
 		o.partySize = 2
-	}
-	if o.venueID < 0 {
-		o.venueID = venueDeadRabbit
 	}
 	if strings.TrimSpace(o.resDate) == "" {
 		o.resDate = now.AddDate(0, 0, 7).Format("2006-01-02")
@@ -281,34 +249,35 @@ func promptInt(reader *bufio.Reader, out io.Writer, label string, defaultVal int
 	}
 }
 
+// promptVenue asks for a numeric Resy venue id. The v1 hardcoded
+// name/index catalog is gone — users look the id up first via
+// `resy-snipe venue resolve <url>` and paste it here. A blank line
+// keeps the supplied default (when one is set; defaultVal <= 0 means
+// "no default", in which case a blank line re-prompts).
 func promptVenue(reader *bufio.Reader, out io.Writer, defaultVal int) (int, error) {
-	fprintln(out, "Venues (or enter custom venue ID):")
-	for i, venue := range venueOptions {
-		fprintf(out, "  %d) %s (%d)\n", i+1, venue.Name, venue.ID)
+	fprintln(out, "Look up a venue id with `resy-snipe venue resolve <url>` first, then paste the numeric id below.")
+	defaultStr := ""
+	if defaultVal > 0 {
+		defaultStr = strconv.Itoa(defaultVal)
 	}
-	defaultName := venueNameByID(defaultVal)
-	if defaultName == "" {
-		defaultName = "Custom"
-	}
-	fprintf(out, "Default venue: %s (%d)\n", defaultName, defaultVal)
 	for {
-		raw, err := promptRaw(reader, out, "Venue (list number, venue id, or name)", strconv.Itoa(defaultVal))
+		raw, err := promptRaw(reader, out, "Venue id", defaultStr)
 		if err != nil {
 			return 0, err
 		}
 		if raw == "" {
-			return defaultVal, nil
-		}
-		if value, err := strconv.Atoi(raw); err == nil {
-			if value >= 1 && value <= len(venueOptions) {
-				return venueOptions[value-1].ID, nil
+			if defaultVal > 0 {
+				return defaultVal, nil
 			}
-			return value, nil
+			fprintln(out, "Venue id is required. Enter a positive integer.")
+			continue
 		}
-		if id, ok := venueIDByName(raw); ok {
-			return id, nil
+		value, err := strconv.Atoi(raw)
+		if err != nil || value <= 0 {
+			fprintln(out, "Invalid venue id. Enter a positive integer.")
+			continue
 		}
-		fprintln(out, "Invalid venue. Enter a list number, venue id, or name.")
+		return value, nil
 	}
 }
 
@@ -350,25 +319,6 @@ func promptTableTypes(reader *bufio.Reader, out io.Writer, label, defaultVal str
 		raw = defaultVal
 	}
 	return raw, nil
-}
-
-func venueNameByID(id int) string {
-	for _, venue := range venueOptions {
-		if venue.ID == id {
-			return venue.Name
-		}
-	}
-	return ""
-}
-
-func venueIDByName(name string) (int, bool) {
-	name = strings.TrimSpace(name)
-	for _, venue := range venueOptions {
-		if strings.EqualFold(venue.Name, name) {
-			return venue.ID, true
-		}
-	}
-	return 0, false
 }
 
 // parseCommaList splits and trims; empty fragments are dropped.

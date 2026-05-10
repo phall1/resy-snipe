@@ -71,8 +71,10 @@ func TestRunRejectsBadLogLevel(t *testing.T) {
 func TestRunAcceptsValidLogLevel(t *testing.T) {
 	t.Parallel()
 	// Provide -snipe-time so the chosen release strategy default is
-	// explicit and toIntent doesn't leave anything unset.
-	args := []string{"--log-level", "debug", "-snipe-time", "00:00"}
+	// explicit and toIntent doesn't leave anything unset. -venue-id is
+	// required now that the v1 hardcoded default (Dead Rabbit) is gone;
+	// 38660 is Dead Rabbit, looked up via resy-snipe venue resolve.
+	args := []string{"--log-level", "debug", "-snipe-time", "00:00", "-venue-id", "38660"}
 	if err := run(args, strings.NewReader(""), io.Discard, newTestClock()); err != nil {
 		t.Fatalf("run with valid log level: %v", err)
 	}

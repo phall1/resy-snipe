@@ -99,7 +99,7 @@ func TestBuildResTimeTypesRegression(t *testing.T) {
 	opts := cliOptions{
 		resDate:           "2026-07-04",
 		partySize:         2,
-		venueID:           38660,
+		venueID:           38660, // Dead Rabbit, looked up via resy-snipe venue resolve
 		resTimes:          "18:30",
 		tableTypes:        "Bar,Parlor",
 		snipeDate:         "2026-06-15",
@@ -126,7 +126,7 @@ func TestToIntentNoTableTypes(t *testing.T) {
 	opts := cliOptions{
 		resDate:           "2026-07-04",
 		partySize:         2,
-		venueID:           38660,
+		venueID:           38660, // Dead Rabbit, looked up via resy-snipe venue resolve
 		resTimes:          "18:30,19:00,19:30",
 		snipeDate:         "2026-06-15",
 		snipeTime:         "09:00",
@@ -152,7 +152,7 @@ func TestToIntentTableTypesNoneToken(t *testing.T) {
 	opts := cliOptions{
 		resDate:           "2026-07-04",
 		partySize:         2,
-		venueID:           38660,
+		venueID:           38660, // Dead Rabbit, looked up via resy-snipe venue resolve
 		resTimes:          "18:30",
 		tableTypes:        "none",
 		snipeDate:         "2026-06-15",
@@ -261,7 +261,7 @@ func TestDefaultReleaseStrategyByContext(t *testing.T) {
 		opts := cliOptions{
 			resDate:           "2026-07-04",
 			partySize:         2,
-			venueID:           38660,
+			venueID:           38660, // Dead Rabbit, looked up via resy-snipe venue resolve
 			resTimes:          "18:30",
 			snipeDate:         "2026-06-15",
 			snipeTime:         "09:00",
@@ -282,7 +282,7 @@ func TestDefaultReleaseStrategyByContext(t *testing.T) {
 		opts := cliOptions{
 			resDate:           "2026-07-04",
 			partySize:         2,
-			venueID:           38660,
+			venueID:           38660, // Dead Rabbit, looked up via resy-snipe venue resolve
 			resTimes:          "18:30",
 			snipeDate:         "2026-06-15",
 			snipeTime:         "00:00",
@@ -351,7 +351,7 @@ func TestToIntentValidation(t *testing.T) {
 		return cliOptions{
 			resDate:           "2026-07-04",
 			partySize:         2,
-			venueID:           38660,
+			venueID:           38660, // Dead Rabbit, looked up via resy-snipe venue resolve
 			resTimes:          "18:30",
 			snipeDate:         "2026-06-15",
 			snipeTime:         "09:00",
@@ -452,25 +452,74 @@ func TestPromptHelpersWithCannedInput(t *testing.T) {
 		}
 	})
 
-	t.Run("promptVenue accepts list number", func(t *testing.T) {
+	t.Run("promptVenue accepts numeric venue id", func(t *testing.T) {
 		t.Parallel()
-		got, err := promptVenue(bufio.NewReader(strings.NewReader("1\n")), io.Discard, venueRubirosa)
+		// 466 is Rubirosa, looked up via resy-snipe venue resolve.
+		got, err := promptVenue(bufio.NewReader(strings.NewReader("466\n")), io.Discard, 0)
 		if err != nil {
 			t.Fatalf("promptVenue: %v", err)
 		}
-		if got != venueDeadRabbit {
-			t.Errorf("got %d want %d (Dead Rabbit at index 1)", got, venueDeadRabbit)
+		if got != 466 {
+			t.Errorf("got %d want 466", got)
 		}
 	})
 
-	t.Run("promptVenue accepts venue name", func(t *testing.T) {
+	t.Run("promptVenue accepts default on blank line", func(t *testing.T) {
 		t.Parallel()
-		got, err := promptVenue(bufio.NewReader(strings.NewReader("Carbone\n")), io.Discard, venueDeadRabbit)
+		got, err := promptVenue(bufio.NewReader(strings.NewReader("\n")), io.Discard, 6194)
 		if err != nil {
 			t.Fatalf("promptVenue: %v", err)
 		}
-		if got != venueCarbone {
-			t.Errorf("got %d want %d", got, venueCarbone)
+		if got != 6194 {
+			t.Errorf("got %d want 6194 (default)", got)
+		}
+	})
+
+	t.Run("promptVenue rejects non-numeric input", func(t *testing.T) {
+		t.Parallel()
+		out := &bytes.Buffer{}
+		// First line: not a number. Second line: valid id.
+		got, err := promptVenue(bufio.NewReader(strings.NewReader("Carbone\n6194\n")), out, 0)
+		if err != nil {
+			t.Fatalf("promptVenue: %v", err)
+		}
+		if got != 6194 {
+			t.Errorf("got %d want 6194", got)
+		}
+		if !strings.Contains(out.String(), "Invalid venue id") {
+			t.Errorf("validation msg missing: %q", out.String())
+		}
+	})
+
+	t.Run("promptVenue rejects non-positive ids", func(t *testing.T) {
+		t.Parallel()
+		out := &bytes.Buffer{}
+		// First line: zero (not positive). Second: negative. Third: valid.
+		got, err := promptVenue(bufio.NewReader(strings.NewReader("0\n-5\n38660\n")), out, 0)
+		if err != nil {
+			t.Fatalf("promptVenue: %v", err)
+		}
+		if got != 38660 {
+			t.Errorf("got %d want 38660", got)
+		}
+		if !strings.Contains(out.String(), "Invalid venue id") {
+			t.Errorf("validation msg missing: %q", out.String())
+		}
+	})
+
+	t.Run("promptVenue with no default re-prompts on blank", func(t *testing.T) {
+		t.Parallel()
+		out := &bytes.Buffer{}
+		// First line: blank with no default. Second line: valid id.
+		got, err := promptVenue(bufio.NewReader(strings.NewReader("\n466\n")), out, 0)
+		if err != nil {
+			t.Fatalf("promptVenue: %v", err)
+		}
+		if got != 466 {
+			t.Errorf("got %d want 466", got)
+		}
+		if !strings.Contains(out.String(), "Venue id is required") {
+			t.Errorf("validation msg missing: %q", out.String())
 		}
 	})
 
@@ -494,7 +543,7 @@ func TestPromptHelpersWithCannedInput(t *testing.T) {
 		opts := &cliOptions{
 			resDate:    "2026-07-04",
 			partySize:  2,
-			venueID:    venueDeadRabbit,
+			venueID:    38660, // Dead Rabbit, looked up via resy-snipe venue resolve
 			resTimes:   "18:30",
 			tableTypes: "Bar",
 			snipeDate:  "2026-06-15",
@@ -505,7 +554,7 @@ func TestPromptHelpersWithCannedInput(t *testing.T) {
 		if err := runInteractive(opts, strings.NewReader(input), io.Discard); err != nil {
 			t.Fatalf("runInteractive: %v", err)
 		}
-		if opts.resDate != "2026-07-04" || opts.partySize != 2 || opts.venueID != venueDeadRabbit {
+		if opts.resDate != "2026-07-04" || opts.partySize != 2 || opts.venueID != 38660 {
 			t.Errorf("defaults clobbered: %+v", opts)
 		}
 		if opts.resTimes != "18:30" || opts.tableTypes != "Bar" {

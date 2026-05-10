@@ -401,11 +401,13 @@ func TestRun_SnipeWithUserFlag_ExpiredSession(t *testing.T) {
 	}
 	_ = db.Close()
 
-	// Use a snipe time + user; run() should bail out before doing
-	// anything snipe-y because LoadSession sees an expired row.
+	// Use a snipe time + user + venue id; run() should bail out before
+	// doing anything snipe-y because LoadSession sees an expired row.
+	// 38660 is Dead Rabbit, looked up via resy-snipe venue resolve.
 	args := []string{
 		"-snipe-time", "00:00",
 		"-user", "u@x.io",
+		"-venue-id", "38660",
 	}
 	var out bytes.Buffer
 	err = run(args, strings.NewReader(""), &out, clock.NewFake(fixedNow))
@@ -450,9 +452,11 @@ func TestRun_SnipeWithUserFlag_LoadsPersistedSession(t *testing.T) {
 	}
 	_ = db.Close()
 
+	// 38660 is Dead Rabbit, looked up via resy-snipe venue resolve.
 	args := []string{
 		"-snipe-time", "00:00",
 		"-user", "u@x.io",
+		"-venue-id", "38660",
 	}
 
 	prev := runSnipeFn
