@@ -47,6 +47,22 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 
+	// Downgrade refusal: an applied version higher than any embedded
+	// migration means the DB was last touched by a newer binary. The
+	// upgrade contract (ADR-0006, daemon §12.2) is forward-only.
+	var maxEmbedded int
+	for _, m := range migs {
+		if m.version > maxEmbedded {
+			maxEmbedded = m.version
+		}
+	}
+	for v := range applied {
+		if v > maxEmbedded {
+			return fmt.Errorf("%w: schema v%d is newer than this binary's max v%d",
+				ErrSchemaNewer, v, maxEmbedded)
+		}
+	}
+
 	for _, m := range migs {
 		if applied[m.version] {
 			continue
@@ -56,6 +72,45 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// ErrSchemaNewer is returned by Migrate when the database reports a
+// schema_migrations.version higher than any embedded migration in
+// this binary. The caller (daemon boot) maps it to exit code 3.
+var ErrSchemaNewer = errors.New("store: schema is newer than this binary; downgrade refused")
+
+// EmbeddedMaxVersion returns the highest migration version this
+// binary knows how to apply. Exposed for the daemon boot banner so
+// the operator can see what "schema vN" the binary supports without
+// running migrations first.
+func EmbeddedMaxVersion() (int, error) {
+	migs, err := loadMigrations()
+	if err != nil {
+		return 0, err
+	}
+	var maxV int
+	for _, m := range migs {
+		if m.version > maxV {
+			maxV = m.version
+		}
+	}
+	return maxV, nil
+}
+
+// AppliedMaxVersion returns the highest schema_migrations.version
+// currently recorded in db. Used by the boot banner.
+func AppliedMaxVersion(ctx context.Context, db *sql.DB) (int, error) {
+	applied, err := readApplied(ctx, db)
+	if err != nil {
+		return 0, err
+	}
+	var maxV int
+	for v := range applied {
+		if v > maxV {
+			maxV = v
+		}
+	}
+	return maxV, nil
 }
 
 func readApplied(ctx context.Context, db *sql.DB) (map[int]bool, error) {
