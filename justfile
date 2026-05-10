@@ -37,6 +37,12 @@ test-pkg PKG:
 test-flake N="10":
     go test -race -count={{N}} ./...
 
+# Run the tenancy-enforcement harness (build tag `tenancy`). Asserts every
+# Store method takes a `domain.UserID` or is on the v1-legacy allowlist.
+# See docs/v2/design/multi-user.md §tenancy-enforcement.
+test-tenancy:
+    go test -race -tags=tenancy ./internal/store/...
+
 # Lint: go vet + golangci-lint when present. golangci-lint config lives at
 # .golangci.yml (see beads-49u).
 lint:
