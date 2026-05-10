@@ -90,6 +90,18 @@ var v1LegacyMethodAllowlist = []string{
 	"UpsertNameSearchCache",
 	"GetNameSearchCache",
 
+	// --- cross-tenant admin functions ---
+	// ListUsers is the admin "show me every homelab tenant" query
+	// behind `resy-snipe user list`. It is a privileged cross-tenant
+	// read; Service.ListUsers (M1-10) will gate on role='admin' once
+	// the daemon Service layer is wired. Until then the CLI is the
+	// only caller and operator-only is enforced by the host the
+	// binary runs on. Package-level function (not on Store interface)
+	// so the tenancy harness would not flag it even if this entry
+	// were omitted — listed here for documentation parity with the
+	// cache peers above.
+	"ListUsers",
+
 	// --- infrastructure ---
 	// DB returns the raw *sql.DB for tests. Not a user-data
 	// operation; production code goes through the Store interface.

@@ -44,8 +44,14 @@ func main() {
 func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) error {
 	// Subcommand dispatch. The first positional arg (when present and
 	// not a flag) selects the subcommand; everything else falls through
-	// to the existing snipe flow. Today only `login` is recognized;
-	// future subcommands (e.g. `logout`, `status`) plug in here.
+	// to the existing snipe flow. Recognized subcommands: `login`,
+	// `user`, `venue resolve`. Future subcommands plug in here.
+	if len(args) > 1 && args[0] == "venue" && args[1] == "resolve" {
+		return runResolveCmd(context.Background(), args[2:], stdin, logOut, clk)
+	}
+	if len(args) > 0 && args[0] == "user" {
+		return runUserCmd(context.Background(), args[1:], stdin, logOut, clk)
+	}
 	if len(args) > 0 && args[0] == "login" {
 		// Parent ctx has no deadline because runLogin's prompt loop is
 		// interactive (the user types their email + password — could
