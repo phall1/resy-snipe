@@ -93,6 +93,7 @@ func TestMigrateRecordsAppliedVersions(t *testing.T) {
 	want := []row{
 		{version: 1, name: "initial"},
 		{version: 2, name: "v2_multi_user"},
+		{version: 3, name: "idempotency"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("schema_migrations rows: %+v, want %+v", got, want)
@@ -118,8 +119,8 @@ func TestMigrateIsIdempotent(t *testing.T) {
 		`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 {
-		t.Fatalf("schema_migrations row count = %d, want 2 after triple-Migrate", n)
+	if n != 3 {
+		t.Fatalf("schema_migrations row count = %d, want 3 after triple-Migrate", n)
 	}
 }
 

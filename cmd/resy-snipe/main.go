@@ -53,6 +53,8 @@ func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) erro
 		switch args[1] {
 		case "plan":
 			return runQuestPlanCmd(context.Background(), args[2:], stdin, logOut, clk)
+		case "create":
+			return runQuestCreateCmd(context.Background(), args[2:], stdin, logOut, clk)
 		case "list":
 			return runQuestListCmd(context.Background(), args[2:], stdin, logOut, clk)
 		case "get":

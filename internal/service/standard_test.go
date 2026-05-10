@@ -139,6 +139,37 @@ func (a *testStoreBackend) ListQuestEvents(
 	return store.ListQuestEvents(ctx, a.store.DB(), userID, questID, limit)
 }
 
+func (a *testStoreBackend) GetIdempotencyResult(
+	ctx context.Context,
+	userID domain.UserID,
+	scope, plaintextKey, payloadHash string,
+	now time.Time,
+) (service.IdempotencyLookup, error) {
+	lookup, err := store.GetIdempotencyResult(ctx, a.store.DB(), userID, scope, plaintextKey, payloadHash, now)
+	if err != nil {
+		return service.IdempotencyLookup{}, err
+	}
+	return service.IdempotencyLookup{
+		Found:        lookup.Found,
+		PayloadMatch: lookup.PayloadMatch,
+		Expired:      lookup.Expired,
+		TargetID:     lookup.TargetID,
+		PrevErr:      lookup.ResultErr,
+	}, nil
+}
+
+func (a *testStoreBackend) PutIdempotencyResult(
+	ctx context.Context,
+	userID domain.UserID,
+	scope, plaintextKey, payloadHash string,
+	targetID string,
+	errVal error,
+	ttl time.Duration,
+	now time.Time,
+) error {
+	return store.PutIdempotencyResult(ctx, a.store.DB(), userID, scope, plaintextKey, payloadHash, targetID, errVal, ttl, now)
+}
+
 // ---- fake resolver / provider / auth -------------------------------------
 
 type fakeResolver struct {

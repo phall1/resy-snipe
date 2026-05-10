@@ -70,6 +70,22 @@ type EventRow struct {
 	Attrs []slog.Attr
 }
 
+// IdempotencyLookup is the consumer-side projection of an
+// idempotency_keys row, returned by StoreBackend.GetIdempotencyResult.
+// Found is false when no row matches (userID, scope, plaintextKey);
+// PayloadMatch is false when a row exists for the key but its
+// payloadHash differs (the Service surfaces ErrIdempotencyConflict
+// in that case); Expired is true when the matching row has already
+// passed expires_at (callers treat expired==true as not-found).
+// TargetID and PrevErr replay the persisted outcome.
+type IdempotencyLookup struct {
+	Found        bool
+	PayloadMatch bool
+	Expired      bool
+	TargetID     string
+	PrevErr      string
+}
+
 // StoreBackend is the slim persistence seam the Service depends on,
 // defined at the consumer per docs/laws.md Law 5. The internal/store
 // package owns the implementation (a small set of package-level
@@ -138,6 +154,35 @@ type StoreBackend interface {
 	// Until M1-11 wires the quest_events writers this returns an
 	// empty slice — that is intentional, not an error condition.
 	ListQuestEvents(ctx context.Context, userID domain.UserID, questID domain.QuestID, limit int) ([]domain.Event, error)
+
+	// GetIdempotencyResult looks up a prior CreateQuest/CancelQuest
+	// outcome filed under (userID, scope, plaintextKey, payloadHash).
+	// See IdempotencyLookup for the field semantics; in summary:
+	//   * Found=false means no row exists — proceed fresh.
+	//   * Found=true, PayloadMatch=true → return the persisted result.
+	//   * Found=true, PayloadMatch=false → surface ErrIdempotencyConflict.
+	//   * Expired=true → treat as not-found (proceed fresh).
+	GetIdempotencyResult(
+		ctx context.Context,
+		userID domain.UserID,
+		scope, plaintextKey, payloadHash string,
+		now time.Time,
+	) (IdempotencyLookup, error)
+
+	// PutIdempotencyResult records the outcome of a CreateQuest /
+	// CancelQuest call. errVal nil persists a success row (result_code
+	// = 'ok'); non-nil persists the error string for replay. The TTL
+	// + now pair stamps expires_at without the store reading the wall
+	// clock on its own (Law 7).
+	PutIdempotencyResult(
+		ctx context.Context,
+		userID domain.UserID,
+		scope, plaintextKey, payloadHash string,
+		targetID string,
+		errVal error,
+		ttl time.Duration,
+		now time.Time,
+	) error
 }
 
 // ResyAuthBackend is the slim auth seam the Service depends on for

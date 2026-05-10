@@ -193,6 +193,45 @@ func (a *serviceStoreAdapter) ListQuestEvents(
 	return store.ListQuestEvents(ctx, a.store.DB(), userID, questID, limit)
 }
 
+// GetIdempotencyResult delegates to store.GetIdempotencyResult,
+// repacking the store-side store.IdempotencyLookup into the
+// service-side service.IdempotencyLookup. The store function reads
+// no clock of its own — `now` is the caller's idea of the present
+// and the only input that drives the Expired flag (Law 7).
+func (a *serviceStoreAdapter) GetIdempotencyResult(
+	ctx context.Context,
+	userID domain.UserID,
+	scope, plaintextKey, payloadHash string,
+	now time.Time,
+) (service.IdempotencyLookup, error) {
+	lookup, err := store.GetIdempotencyResult(ctx, a.store.DB(), userID, scope, plaintextKey, payloadHash, now)
+	if err != nil {
+		return service.IdempotencyLookup{}, err
+	}
+	return service.IdempotencyLookup{
+		Found:        lookup.Found,
+		PayloadMatch: lookup.PayloadMatch,
+		Expired:      lookup.Expired,
+		TargetID:     lookup.TargetID,
+		PrevErr:      lookup.ResultErr,
+	}, nil
+}
+
+// PutIdempotencyResult delegates to store.PutIdempotencyResult.
+// errVal may be nil (success row) or any error (the store persists
+// errVal.Error()).
+func (a *serviceStoreAdapter) PutIdempotencyResult(
+	ctx context.Context,
+	userID domain.UserID,
+	scope, plaintextKey, payloadHash string,
+	targetID string,
+	errVal error,
+	ttl time.Duration,
+	now time.Time,
+) error {
+	return store.PutIdempotencyResult(ctx, a.store.DB(), userID, scope, plaintextKey, payloadHash, targetID, errVal, ttl, now)
+}
+
 func toServiceQuestRow(r store.QuestRow) service.QuestRow {
 	return service.QuestRow{
 		ID:          r.ID,
