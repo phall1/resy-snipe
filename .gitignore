@@ -9,6 +9,7 @@
 
 # Build artifacts
 /bin/
+/resy-snipe
 
 # Claude Code harness-local state (worktrees are agent-specific scratch dirs)
 .claude/worktrees/
