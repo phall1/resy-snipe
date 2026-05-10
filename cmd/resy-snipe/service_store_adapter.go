@@ -232,6 +232,41 @@ func (a *serviceStoreAdapter) PutIdempotencyResult(
 	return store.PutIdempotencyResult(ctx, a.store.DB(), userID, scope, plaintextKey, payloadHash, targetID, errVal, ttl, now)
 }
 
+// WriteAuditEvent delegates to store.WriteAuditEvent (M1-11). The
+// adapter repacks the service-side AuditWrite into the store-side
+// AuditEventInput verbatim — the two shapes carry the same fields
+// (the consumer-defined-at-the-Service-layer projection from Law 5).
+func (a *serviceStoreAdapter) WriteAuditEvent(ctx context.Context, evt service.AuditWrite) error {
+	var target *domain.UserID
+	if evt.TargetUserID != nil {
+		t := *evt.TargetUserID
+		target = &t
+	}
+	return store.WriteAuditEvent(ctx, a.store.DB(), store.AuditEventInput{
+		UserID:       evt.UserID,
+		TargetUserID: target,
+		Action:       evt.Action,
+		TargetID:     evt.TargetID,
+		OK:           evt.OK,
+		ErrorCode:    evt.ErrorCode,
+		IP:           evt.IP,
+		UserAgent:    evt.UserAgent,
+		DetailsJSON:  evt.DetailsJSON,
+	})
+}
+
+// WriteQuestEvent delegates to store.WriteQuestEvent (M1-11). The
+// store helper gates the INSERT on quests.user_id at the SQL level
+// so the adapter is a pure pass-through.
+func (a *serviceStoreAdapter) WriteQuestEvent(
+	ctx context.Context,
+	userID domain.UserID,
+	questID domain.QuestID,
+	evt domain.Event,
+) error {
+	return store.WriteQuestEvent(ctx, a.store.DB(), userID, questID, evt)
+}
+
 func toServiceQuestRow(r store.QuestRow) service.QuestRow {
 	return service.QuestRow{
 		ID:          r.ID,

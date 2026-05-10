@@ -183,6 +183,41 @@ type StoreBackend interface {
 		ttl time.Duration,
 		now time.Time,
 	) error
+
+	// WriteAuditEvent persists one audit_events row for the supplied
+	// AuditWrite. Every Service-layer call writes exactly one row
+	// before returning (docs/v2/design/service-layer.md
+	// §audit-log-contract); failed auth still logs. Implementations
+	// must NOT fail the parent call on audit-write errors — the
+	// Service's audit helper translates errors to a WARN log and
+	// proceeds.
+	WriteAuditEvent(ctx context.Context, evt AuditWrite) error
+
+	// WriteQuestEvent persists one quest_events row for (userID,
+	// questID). Engine state transitions surface as one Event each
+	// (internal/engine emits one Notification per transition); the
+	// Service bridges those into this seam so subsequent GetQuest /
+	// SubscribeQuest calls can replay history.
+	WriteQuestEvent(ctx context.Context, userID domain.UserID, questID domain.QuestID, evt domain.Event) error
+}
+
+// AuditWrite is the consumer-side projection of one audit_events row,
+// shaped for the Service's audit helper. IP and UserAgent are
+// transport concerns (HTTP-side metadata) and stay empty for the M1
+// wave — M2 transports populate them via the bearer-token middleware.
+// DetailsJSON is bounded to 4KiB at the design-doc level
+// (multi-user.md §audit_events); the Service's audit helper enforces
+// the bound at write time.
+type AuditWrite struct {
+	UserID       domain.UserID
+	TargetUserID *domain.UserID
+	Action       string
+	TargetID     string
+	OK           bool
+	ErrorCode    string
+	IP           string
+	UserAgent    string
+	DetailsJSON  []byte
 }
 
 // ResyAuthBackend is the slim auth seam the Service depends on for
@@ -212,6 +247,12 @@ type Standard struct {
 	auth     ResyAuthBackend
 	clock    clock.Clock
 	logger   *slog.Logger
+	// persistEvents controls whether SubscribeQuest writes engine
+	// transitions to the quest_events stream. Defaults to true (M1-11
+	// §engine-event → quest_event bridge). Tests that exercise the
+	// streaming path without a persistence side-effect can flip it off
+	// via WithPersistEvents(false).
+	persistEvents bool
 }
 
 // Compile-time interface check (Law 6).
@@ -236,6 +277,17 @@ func WithLogger(log *slog.Logger) Option {
 func WithAuth(a ResyAuthBackend) Option {
 	return func(s *Standard) {
 		s.auth = a
+	}
+}
+
+// WithPersistEvents pins whether SubscribeQuest writes engine
+// transitions to the quest_events stream. Defaults to true; tests that
+// drive the live path without wanting a persistence side-effect (e.g.
+// the M1-13 subscribe tests that pre-seed history via raw SQL) can
+// disable it.
+func WithPersistEvents(enabled bool) Option {
+	return func(s *Standard) {
+		s.persistEvents = enabled
 	}
 }
 
@@ -277,11 +329,12 @@ func New(
 		return nil, errors.New("service.New: clock is required")
 	}
 	s := &Standard{
-		resolver: r,
-		engine:   eng,
-		store:    st,
-		clock:    clk,
-		logger:   slog.Default(),
+		resolver:      r,
+		engine:        eng,
+		store:         st,
+		clock:         clk,
+		logger:        slog.Default(),
+		persistEvents: true,
 	}
 	for _, opt := range opts {
 		opt(s)

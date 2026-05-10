@@ -23,10 +23,23 @@ import (
 // TODO(M2): replace the v1 session bridge with a sealed-secrets path
 // (design/secrets.md). The current shape stores the Resy JWT
 // plaintext in sessions.jwt; M2 wraps it in secrets.ciphertext.
-func (s *Standard) Login(ctx context.Context, userID domain.UserID, accountEmail, password string) (domain.AccountID, error) {
+func (s *Standard) Login(ctx context.Context, userID domain.UserID, accountEmail, password string) (acctID domain.AccountID, retErr error) {
 	if userID == "" {
 		return "", fmt.Errorf("Login: %w: userID is required", ErrInvalidArgument)
 	}
+	// Failed auth still logs (design §audit-log-contract). The
+	// deferred audit captures every exit path; target_id is the
+	// account-email-shape input on failure (we don't know acctID
+	// until BindAccountToUser succeeds) and the bound acctID on
+	// success.
+	defer func() {
+		target := accountEmail
+		if acctID != "" {
+			target = string(acctID)
+		}
+		s.audit(ctx, userID, actionAccountLogin, target, retErr)
+	}()
+
 	if accountEmail == "" || password == "" {
 		return "", fmt.Errorf("Login: %w: email and password are required", ErrInvalidArgument)
 	}
@@ -41,7 +54,7 @@ func (s *Standard) Login(ctx context.Context, userID domain.UserID, accountEmail
 		return "", fmt.Errorf("Login: %w", err)
 	}
 
-	acctID, err := s.store.BindAccountToUser(ctx, userID, resolvedEmail)
+	acctID, err = s.store.BindAccountToUser(ctx, userID, resolvedEmail)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			// The auth backend reported success but no legacy
@@ -53,24 +66,25 @@ func (s *Standard) Login(ctx context.Context, userID domain.UserID, accountEmail
 		return "", fmt.Errorf("Login bind account: %w", err)
 	}
 
-	// TODO(M1-11): audit_events.write(user=userID, action=login,
-	// target=acctID, ok=true).
-
 	return acctID, nil
 }
 
 // ListAccounts returns the Resy accounts bound to userID, stripped
 // of secrets. The v2 schema has no display-only "last_used_at" yet,
 // so the surface here mirrors only the columns the schema carries.
-func (s *Standard) ListAccounts(ctx context.Context, userID domain.UserID) ([]Account, error) {
+func (s *Standard) ListAccounts(ctx context.Context, userID domain.UserID) (out []Account, retErr error) {
 	if userID == "" {
 		return nil, fmt.Errorf("ListAccounts: %w: userID is required", ErrInvalidArgument)
 	}
+	defer func() {
+		s.audit(ctx, userID, actionAccountList, "", retErr)
+	}()
+
 	rows, err := s.store.ListAccounts(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("ListAccounts: %w", err)
 	}
-	out := make([]Account, 0, len(rows))
+	out = make([]Account, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, Account{
 			ID:          r.ID,
@@ -86,42 +100,60 @@ func (s *Standard) ListAccounts(ctx context.Context, userID domain.UserID) ([]Ac
 
 // InviteUser is the operator-only "provision a new tenant" verb. M1-10
 // returns ErrNotImplemented; a later issue (the operator-admin wave)
-// wires it.
-func (s *Standard) InviteUser(_ context.Context, _ domain.UserID, _, _ string) (Invite, error) {
+// wires it. The attempt is still audited (failed auth/operator
+// actions are recorded per §audit-log-contract).
+func (s *Standard) InviteUser(ctx context.Context, userID domain.UserID, email, _ string) (Invite, error) {
 	// TODO(operator-admin): generate invite token, hash it, persist to
 	// invites table, return plaintext invite payload.
-	return Invite{}, ErrNotImplemented
+	err := ErrNotImplemented
+	s.audit(ctx, userID, actionUserInvite, email, err)
+	return Invite{}, err
 }
 
 // AcceptInvite is the unauthenticated "redeem an invite token" verb.
-// M1-10 returns ErrNotImplemented.
+// M1-10 returns ErrNotImplemented. Audit row is logged under the
+// (still-empty) UserID actor; the audit helper guards the empty-actor
+// case by skipping the write so this is effectively a no-op until
+// the verb is wired.
 func (s *Standard) AcceptInvite(_ context.Context, _, _, _ string) (domain.UserID, BearerToken, error) {
 	// TODO(operator-admin): validate token hash, insert users row,
-	// mint initial BearerToken, mark invite consumed.
+	// mint initial BearerToken, mark invite consumed. On success,
+	// audit under the freshly-minted UserID; on failure (expired
+	// or consumed invite) the audit row has no valid actor — the
+	// operator-admin wave decides how to record those (likely a
+	// separate `invites.attempts` table keyed by invite_hash, not
+	// audit_events). M1-11 skips the audit until that decision
+	// lands.
 	return "", BearerToken{}, ErrNotImplemented
 }
 
 // RotateToken issues a fresh bearer token for the caller. M1-10
 // returns ErrNotImplemented.
-func (s *Standard) RotateToken(_ context.Context, _ domain.UserID, _ string) (BearerToken, error) {
+func (s *Standard) RotateToken(ctx context.Context, userID domain.UserID, label string) (BearerToken, error) {
 	// TODO(operator-admin): mint new token, hash, insert tokens row,
 	// return plaintext to caller.
-	return BearerToken{}, ErrNotImplemented
+	err := ErrNotImplemented
+	s.audit(ctx, userID, actionTokenRotate, label, err)
+	return BearerToken{}, err
 }
 
 // RevokeToken invalidates a bearer token. M1-10 returns
 // ErrNotImplemented.
-func (s *Standard) RevokeToken(_ context.Context, _ domain.UserID, _ string) error {
+func (s *Standard) RevokeToken(ctx context.Context, userID domain.UserID, tokenID string) error {
 	// TODO(operator-admin): UPDATE tokens SET revoked_at = ? WHERE
 	// token_id = ? AND user_id = ?.
-	return ErrNotImplemented
+	err := ErrNotImplemented
+	s.audit(ctx, userID, actionTokenRevoke, tokenID, err)
+	return err
 }
 
 // ListUsers is the operator-only cross-tenant listing. M1-10 returns
 // ErrNotImplemented; the existing CLI continues to call
 // store.ListUsers directly for now.
-func (s *Standard) ListUsers(_ context.Context, _ domain.UserID) ([]User, error) {
+func (s *Standard) ListUsers(ctx context.Context, userID domain.UserID) ([]User, error) {
 	// TODO(operator-admin): gate on role='admin', then surface
 	// store.ListUsers' rows.
-	return nil, ErrNotImplemented
+	err := ErrNotImplemented
+	s.audit(ctx, userID, actionUserList, "", err)
+	return nil, err
 }

@@ -41,13 +41,32 @@ const (
 // the resolve call.
 func (s *Standard) ResolveVenue(ctx context.Context, userID domain.UserID, query domain.VenueQuery) (domain.Venue, error) {
 	if userID == "" {
-		return domain.Venue{}, fmt.Errorf("ResolveVenue: %w: userID is required", ErrInvalidArgument)
+		err := fmt.Errorf("ResolveVenue: %w: userID is required", ErrInvalidArgument)
+		// Audit even validation failures; the actor is the empty
+		// string in that case which the store rejects. We skip the
+		// write rather than logging a write-failure-on-missing-actor
+		// noise line.
+		return domain.Venue{}, err
 	}
 	v, err := s.resolver.Resolve(ctx, query)
 	if err != nil {
-		return domain.Venue{}, mapResolverError(err)
+		mapped := mapResolverError(err)
+		s.audit(ctx, userID, actionVenueResolve, queryAuditTarget(query), mapped)
+		return domain.Venue{}, mapped
 	}
+	s.audit(ctx, userID, actionVenueResolve, v.AsRef().String(), nil)
 	return v, nil
+}
+
+// queryAuditTarget renders a domain.VenueQuery into the short string
+// suitable for the audit_events.target_id column. The full Query
+// can be larger than the column tolerates; the String() form is
+// already short and deterministic.
+func queryAuditTarget(q domain.VenueQuery) string {
+	if q == nil {
+		return ""
+	}
+	return q.String()
 }
 
 // PlanQuest is the pure (Goal, Venue) → Plan computation. The
@@ -64,12 +83,16 @@ func (s *Standard) PlanQuest(ctx context.Context, userID domain.UserID, goal dom
 	}
 	now := s.clock.Now()
 	if err := goal.Validate(now); err != nil {
-		return domain.Plan{}, fmt.Errorf("PlanQuest: %w: %w", ErrInvalidArgument, err)
+		wrapped := fmt.Errorf("PlanQuest: %w: %w", ErrInvalidArgument, err)
+		s.audit(ctx, userID, actionQuestPlan, "", wrapped)
+		return domain.Plan{}, wrapped
 	}
 
 	venue, err := s.resolver.Resolve(ctx, goal.VenueQuery)
 	if err != nil {
-		return domain.Plan{}, mapResolverError(err)
+		mapped := mapResolverError(err)
+		s.audit(ctx, userID, actionQuestPlan, "", mapped)
+		return domain.Plan{}, mapped
 	}
 
 	// Calendar snapshot is best-effort: a missing/erroring provider
@@ -101,8 +124,11 @@ func (s *Standard) PlanQuest(ctx context.Context, userID domain.UserID, goal dom
 		CalendarSnapshot: snap,
 	})
 	if err != nil {
-		return domain.Plan{}, fmt.Errorf("PlanQuest: %w", err)
+		wrapped := fmt.Errorf("PlanQuest: %w", err)
+		s.audit(ctx, userID, actionQuestPlan, "", wrapped)
+		return domain.Plan{}, wrapped
 	}
+	s.audit(ctx, userID, actionQuestPlan, plan.Hash, nil)
 	return plan, nil
 }
 
@@ -134,10 +160,17 @@ func (s *Standard) CreateQuest(
 	userID domain.UserID,
 	goal domain.Goal,
 	opts CreateOpts,
-) (domain.QuestID, error) {
+) (qid domain.QuestID, retErr error) {
 	if userID == "" {
 		return "", fmt.Errorf("CreateQuest: %w: userID is required", ErrInvalidArgument)
 	}
+	// Centralized audit on every exit path. The closure captures qid
+	// (the named return) so a successful create logs the minted
+	// questID as target; every error path logs target="" (or the
+	// best-known questID if engine.Submit failed after we minted one).
+	defer func() {
+		s.audit(ctx, userID, actionQuestCreate, string(qid), retErr)
+	}()
 
 	// Compute the goal payload hash up-front so the idempotency
 	// pre-check can detect reused keys with mismatched goals. The
@@ -251,6 +284,18 @@ func (s *Standard) CreateQuest(
 		return questID, wrapped
 	}
 
+	// Persist the "submitted" quest_event so subsequent GetQuest /
+	// SubscribeQuest replays see the lifecycle's first beat. The
+	// engine emitted a matching EventSubmitted to its in-process
+	// subscribers, but those notifications are not persisted by the
+	// engine (the v2 quest_events stream is per-user; the engine's
+	// SnipeID-keyed events table is the v1 surface). M1-11 wires
+	// this explicit write so the v2 stream is canonical.
+	s.writeQuestEvent(ctx, userID, questID, domain.Event{
+		Type: domain.EventSubmitted,
+		At:   now,
+	})
+
 	s.recordIdempotency(ctx, userID, scopeCreateQuest, opts.IdempotencyKey, payloadHash, string(questID), nil, now)
 	return questID, nil
 }
@@ -260,12 +305,18 @@ func (s *Standard) CreateQuest(
 // contract.
 //
 // Events are read from the StoreBackend's quest_events seam, bounded
-// by defaultEventLimit. M1-10 returns an empty list until M1-11
-// wires the quest_events writers.
-func (s *Standard) GetQuest(ctx context.Context, userID domain.UserID, questID domain.QuestID) (QuestState, error) {
+// by defaultEventLimit. M1-11 wires the writers (CreateQuest emits
+// "submitted", CancelQuest emits "canceled", SubscribeQuest bridges
+// engine transitions) so the list is non-empty for any quest that
+// has progressed past creation.
+func (s *Standard) GetQuest(ctx context.Context, userID domain.UserID, questID domain.QuestID) (state QuestState, retErr error) {
 	if userID == "" {
 		return QuestState{}, fmt.Errorf("GetQuest: %w: userID is required", ErrInvalidArgument)
 	}
+	defer func() {
+		s.audit(ctx, userID, actionQuestGet, string(questID), retErr)
+	}()
+
 	row, err := s.store.GetQuest(ctx, userID, questID)
 	if err != nil {
 		return QuestState{}, mapStoreNotFound(err)
@@ -274,12 +325,17 @@ func (s *Standard) GetQuest(ctx context.Context, userID domain.UserID, questID d
 	if err != nil {
 		return QuestState{}, fmt.Errorf("GetQuest decode goal: %w", err)
 	}
-	events, err := s.store.ListEvents(ctx, userID, questID, defaultEventLimit)
+
+	// Read from the quest_events stream (M1-11). The ListQuestEvents
+	// seam returns oldest-first; we forward that ordering to the
+	// caller so a UI rendering the history can append rather than
+	// reverse.
+	events, err := s.store.ListQuestEvents(ctx, userID, questID, defaultEventLimit)
 	if err != nil {
 		return QuestState{}, fmt.Errorf("GetQuest events: %w", err)
 	}
 
-	state := QuestState{
+	state = QuestState{
 		Summary: summaryFromRow(row),
 		Goal:    goal,
 		// Plan is reconstructed on demand: M1-10 persists only the
@@ -300,27 +356,25 @@ func (s *Standard) GetQuest(ctx context.Context, userID domain.UserID, questID d
 			slog.String("err", planErr.Error()),
 		)
 	}
-	for _, ev := range events {
-		state.Events = append(state.Events, domain.Event{
-			Type:  ev.Type,
-			At:    ev.At,
-			Attrs: ev.Attrs,
-		})
-	}
+	state.Events = append(state.Events, events...)
 	return state, nil
 }
 
 // ListQuests returns userID's quest summaries narrowed by filter.
 // Empty result is normal — a fresh user has no quests.
-func (s *Standard) ListQuests(ctx context.Context, userID domain.UserID, filter ListFilter) ([]QuestSummary, error) {
+func (s *Standard) ListQuests(ctx context.Context, userID domain.UserID, filter ListFilter) (out []QuestSummary, retErr error) {
 	if userID == "" {
 		return nil, fmt.Errorf("ListQuests: %w: userID is required", ErrInvalidArgument)
 	}
+	defer func() {
+		s.audit(ctx, userID, actionQuestList, "", retErr)
+	}()
+
 	rows, err := s.store.ListQuests(ctx, userID, filter)
 	if err != nil {
 		return nil, fmt.Errorf("ListQuests: %w", err)
 	}
-	out := make([]QuestSummary, 0, len(rows))
+	out = make([]QuestSummary, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, summaryFromRow(r))
 	}
@@ -340,10 +394,13 @@ func (s *Standard) CancelQuest(
 	userID domain.UserID,
 	questID domain.QuestID,
 	opts CancelOpts,
-) error {
+) (retErr error) {
 	if userID == "" {
 		return fmt.Errorf("CancelQuest: %w: userID is required", ErrInvalidArgument)
 	}
+	defer func() {
+		s.audit(ctx, userID, actionQuestCancel, string(questID), retErr)
+	}()
 
 	// For cancel the "payload" is the questID — the same idempotency
 	// key targeted at two different quests is a mismatched-input
@@ -391,12 +448,23 @@ func (s *Standard) CancelQuest(
 		return wrapped
 	}
 
+	// Persist a "canceled" quest_event so subsequent replays see the
+	// terminal beat without depending on a live SubscribeQuest. The
+	// engine has no public Cancel(SnipeID) yet so it does not emit
+	// a matching notification — this explicit write is currently the
+	// only canceled-event source for the v2 stream.
+	s.writeQuestEvent(ctx, userID, questID, domain.Event{
+		Type: domain.EventCanceled,
+		At:   now,
+		Attrs: []slog.Attr{
+			slog.String("reason", opts.Reason),
+		},
+	})
+
 	// TODO(M1-13/engine-cancel): signal the engine so an in-flight
 	// snipe aborts its scheduler loop. engine.Engine currently has no
 	// public Cancel(SnipeID) surface; the DB flip is the only
 	// observable effect for now.
-	// TODO(M1-11): audit_events.write(user=userID, action=cancel_quest,
-	// target=questID, ok=true, reason=opts.Reason).
 	_ = opts.Reason
 
 	s.recordIdempotency(ctx, userID, scopeCancelQuest, opts.IdempotencyKey, payloadHash, string(questID), nil, now)
@@ -523,8 +591,19 @@ func (s *Standard) SubscribeQuest(
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil
 		}
-		return mapStoreNotFound(err)
+		mapped := mapStoreNotFound(err)
+		// Audit the failed subscribe at the gate — design's
+		// §audit-log-contract requires one row per Service call,
+		// success or failure.
+		s.audit(ctx, userID, actionQuestSubscribe, string(questID), mapped)
+		return mapped
 	}
+	// Audit exactly once at subscription start (the design says
+	// SubscribeQuest writes ONE audit row, not one per delivered
+	// event). The call's eventual ctx.Done / terminal-event exit is
+	// not separately audited; the single start-row records the
+	// subscription's lifespan from the audit log's perspective.
+	s.audit(ctx, userID, actionQuestSubscribe, string(questID), nil)
 	// If the quest is already terminal we can short-circuit after
 	// the replay: there will never be a live emission for it.
 	terminal := row.Status.IsTerminal()
@@ -572,6 +651,18 @@ func (s *Standard) SubscribeQuest(
 		if domain.QuestID(n.SnipeID) != questID {
 			return
 		}
+		// Persist the transition into quest_events before forwarding
+		// to cb (M1-11 §engine-event → quest_event bridge). The
+		// engine emits one Notification per state transition, so
+		// this is the right cadence — no per-tick chatter. A write
+		// failure is swallowed (writeQuestEvent logs WARN and
+		// proceeds) so a transient SQLite hiccup never stalls the
+		// live stream. The write runs on the engine's emit
+		// goroutine — engine.Subscribe documents subscribers MUST
+		// NOT block, and a SQLite INSERT is normally sub-ms; if
+		// that bound ever drifts we move the write to the pump
+		// goroutine.
+		s.writeQuestEvent(ctx, userID, questID, n.Event)
 		// Non-blocking send: if the buffer is saturated the
 		// subscriber drops the event rather than stall the
 		// engine. A dropped event surfaces as a gap in the

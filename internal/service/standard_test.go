@@ -170,6 +170,34 @@ func (a *testStoreBackend) PutIdempotencyResult(
 	return store.PutIdempotencyResult(ctx, a.store.DB(), userID, scope, plaintextKey, payloadHash, targetID, errVal, ttl, now)
 }
 
+func (a *testStoreBackend) WriteAuditEvent(ctx context.Context, evt service.AuditWrite) error {
+	var target *domain.UserID
+	if evt.TargetUserID != nil {
+		t := *evt.TargetUserID
+		target = &t
+	}
+	return store.WriteAuditEvent(ctx, a.store.DB(), store.AuditEventInput{
+		UserID:       evt.UserID,
+		TargetUserID: target,
+		Action:       evt.Action,
+		TargetID:     evt.TargetID,
+		OK:           evt.OK,
+		ErrorCode:    evt.ErrorCode,
+		IP:           evt.IP,
+		UserAgent:    evt.UserAgent,
+		DetailsJSON:  evt.DetailsJSON,
+	})
+}
+
+func (a *testStoreBackend) WriteQuestEvent(
+	ctx context.Context,
+	userID domain.UserID,
+	questID domain.QuestID,
+	evt domain.Event,
+) error {
+	return store.WriteQuestEvent(ctx, a.store.DB(), userID, questID, evt)
+}
+
 // ---- fake resolver / provider / auth -------------------------------------
 
 type fakeResolver struct {

@@ -122,6 +122,19 @@ var v1LegacyMethodAllowlist = []string{
 	// level. Package-level function (not on Store) so the harness
 	// would not flag it; listed here for documentation parity.
 	"ListQuestEvents",
+	// WriteQuestEvent filters quest_events on user_id at the SQL
+	// level (the INSERT is gated by a quests.user_id subquery).
+	// Package-level function; documentation parity only. M1-11.
+	"WriteQuestEvent",
+	// WriteAuditEvent records one audit_events row keyed by the
+	// actor's user_id. Package-level function; tenant-scoped from
+	// the actor's side. Documentation parity only. M1-11.
+	"WriteAuditEvent",
+	// ListAuditEvents reads audit_events filtered on user_id (the
+	// actor). Future operator-admin cross-tenant queries will use
+	// a separate target_user_id-scoped reader. Documentation parity
+	// only. M1-11.
+	"ListAuditEvents",
 	// ListAccountsForUser/GetAccountByEmail filter accounts on
 	// user_id. Same package-level-function rationale as the quests
 	// peers.
