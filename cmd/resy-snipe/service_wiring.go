@@ -32,8 +32,6 @@ var _ service.ResyAuthBackend = (*resyAuthAdapter)(nil)
 // newResyAuthAdapter wires the adapter. nil panics at boot — a
 // missing auth backend means Login can't work, which we'd rather
 // surface at startup than at first call.
-//
-//nolint:unused // wired in newStandardService; future M1-18+ CLI quest verbs call into it.
 func newResyAuthAdapter(c *resy.Client) *resyAuthAdapter {
 	if c == nil {
 		panic("newResyAuthAdapter: nil resy client")
@@ -63,8 +61,6 @@ func (a *resyAuthAdapter) Login(ctx context.Context, email, password string) (st
 // and disposes it on exit. The helper lands here so M1-18+ CLI
 // quest subcommands (plan/create/list/get/cancel) can call straight
 // into a fully wired Service.
-//
-//nolint:unused // called by upcoming M1-18+ CLI quest verbs.
 func newStandardService(
 	ctx context.Context,
 	logger *slog.Logger,

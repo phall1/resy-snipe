@@ -29,8 +29,6 @@ type serviceStoreAdapter struct {
 // newServiceStoreAdapter wires the adapter. The store must be
 // non-nil — a nil store is a programming error and panics at boot
 // rather than nil-derefing on first call.
-//
-//nolint:unused // wired in newStandardService; future M1-18+ CLI quest verbs call into it.
 func newServiceStoreAdapter(s *store.SQLiteStore) *serviceStoreAdapter {
 	if s == nil {
 		panic("newServiceStoreAdapter: nil store")
@@ -178,6 +176,21 @@ func (a *serviceStoreAdapter) ListEvents(
 	// TODO(M1-11): SELECT type, at, fields_json FROM quest_events
 	// WHERE user_id = ? AND quest_id = ? ORDER BY at DESC LIMIT ?.
 	return nil, nil
+}
+
+// ListQuestEvents delegates to store.ListQuestEvents. The store
+// function already filters on user_id at the SQL level, so the
+// adapter is a pass-through with no error translation needed —
+// store.ListQuestEvents never returns ErrNotFound (an unknown quest
+// produces an empty slice, consistent with the design's fold of
+// existence into the SubscribeQuest GetQuest gate).
+func (a *serviceStoreAdapter) ListQuestEvents(
+	ctx context.Context,
+	userID domain.UserID,
+	questID domain.QuestID,
+	limit int,
+) ([]domain.Event, error) {
+	return store.ListQuestEvents(ctx, a.store.DB(), userID, questID, limit)
 }
 
 func toServiceQuestRow(r store.QuestRow) service.QuestRow {

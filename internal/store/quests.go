@@ -304,6 +304,84 @@ func UpdateQuestStatus(
 	return nil
 }
 
+// ListQuestEvents returns every quest_events row for (userID, questID)
+// in chronological order (oldest first). It is the replay surface
+// SubscribeQuest uses to deliver history before bridging the engine's
+// live notification stream — see docs/v2/design/service-layer.md
+// §streaming.
+//
+// Tenancy is enforced by filtering on both user_id and quest_id at the
+// SQL level. quest_events.user_id is the denormalized owner of the
+// parent quests row; a wrong-tenant call returns an empty slice (the
+// design folds existence and ownership into one signal — the caller's
+// SubscribeQuest will have already returned ErrNotFound from the prior
+// GetQuest gate when the quest is unknown or owned by another user).
+//
+// limit <= 0 means "no limit"; the caller is responsible for not
+// requesting an unbounded scan on a hot quest.
+//
+// For M1-13 the quest_events writers are not yet wired (M1-11). This
+// function returns an empty slice on a fresh database; that is the
+// intended steady state until the writers land.
+func ListQuestEvents(
+	ctx context.Context,
+	db *sql.DB,
+	userID domain.UserID,
+	questID domain.QuestID,
+	limit int,
+) ([]domain.Event, error) {
+	if db == nil {
+		return nil, errors.New("ListQuestEvents: nil db")
+	}
+	q := `
+		SELECT type, at, fields_json
+		FROM quest_events
+		WHERE user_id = ? AND quest_id = ?
+		ORDER BY at ASC, id ASC`
+	// limit is a non-negative int decided by the caller (the
+	// Service layer passes a constant 0 for "no limit"; transports
+	// that supply a value clamp it server-side). No caller-
+	// controlled bytes reach the SQL text — see docs/laws.md
+	// §Persistence — so gosec G202 is suppressed by review.
+	if limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d", limit) //nolint:gosec // G202: limit is a non-negative int, not user-supplied text.
+	}
+	rows, err := db.QueryContext(ctx, q, string(userID), string(questID))
+	if err != nil {
+		return nil, fmt.Errorf("ListQuestEvents: %w", err)
+	}
+	defer rows.Close()
+
+	out := []domain.Event{}
+	for rows.Next() {
+		var (
+			typeStr    string
+			atMillis   int64
+			fieldsJSON sql.NullString
+		)
+		if err := rows.Scan(&typeStr, &atMillis, &fieldsJSON); err != nil {
+			return nil, fmt.Errorf("ListQuestEvents scan: %w", err)
+		}
+		var attrsBytes []byte
+		if fieldsJSON.Valid {
+			attrsBytes = []byte(fieldsJSON.String)
+		}
+		attrs, err := DecodeAttrs(attrsBytes)
+		if err != nil {
+			return nil, fmt.Errorf("ListQuestEvents decode attrs: %w", err)
+		}
+		out = append(out, domain.Event{
+			Type:  domain.EventType(typeStr),
+			At:    time.UnixMilli(atMillis).UTC(),
+			Attrs: attrs,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ListQuestEvents iterate: %w", err)
+	}
+	return out, nil
+}
+
 // scanQuestRow decodes one quests row. Shared between GetQuest and
 // ListQuests so the column-order contract is in exactly one place.
 func scanQuestRow(s scanner) (QuestRow, error) {

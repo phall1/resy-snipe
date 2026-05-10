@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"resy-snipe/internal/domain"
+	"resy-snipe/internal/engine"
 	"resy-snipe/internal/planner"
 	"resy-snipe/internal/providers"
 	"resy-snipe/internal/resolver"
@@ -306,17 +307,172 @@ func (s *Standard) CancelQuest(
 	return nil
 }
 
-// SubscribeQuest is wired in M1-13. M1-10 returns ErrNotImplemented
-// so callers can compile against the Service surface.
+// SubscribeQuest streams a quest's lifecycle events to cb. The
+// algorithm is the "replay-then-live" pattern from
+// docs/v2/design/service-layer.md §streaming:
+//
+//  1. Tenancy gate. GetQuest folds wrong-tenant and missing-quest
+//     into ErrNotFound — a caller subscribing to somebody else's
+//     quest, or to a typo'd ID, gets the same opaque signal.
+//  2. Replay. Pump every persisted quest_events row for
+//     (userID, questID) through cb in chronological order. M1-13
+//     ships before the quest_events writers (M1-11) so this is
+//     usually empty; the call is still made so the contract is
+//     stable for the day M1-11 lands.
+//  3. Subscribe to the engine. engine.Subscribe is callback-based
+//     and global — the subscriber sees every snipe's notifications
+//     — so we filter on SnipeID == questID (the engine's SnipeID
+//     and the service's QuestID are intentionally the same string
+//     by ADR-0001). engine.Subscribe's contract forbids blocking
+//     on the emit path, so the subscriber stages each match into
+//     a buffered channel rather than invoking cb inline.
+//  4. Pump. Read the channel on the calling goroutine and invoke
+//     cb synchronously — the Service contract is "cb runs on the
+//     caller's goroutine, in arrival order". A terminal status or
+//     ctx.Done ends the pump; both return nil because both are
+//     graceful exits from the subscriber's perspective.
+//
+// The "subscribe before the engine knows about the quest" edge
+// case is benign: engine.Subscribe always succeeds (it's a no-op
+// registration). If the quest exists in persistence but has never
+// been Submitted to this engine instance (e.g. after a daemon
+// restart where the engine has not yet rehydrated), the live path
+// simply produces no notifications and the call blocks until
+// ctx.Done.
+//
+// A nil cb is a programming error and fails fast at the boundary.
 func (s *Standard) SubscribeQuest(
-	_ context.Context,
-	_ domain.UserID,
-	_ domain.QuestID,
-	_ func(domain.Event),
+	ctx context.Context,
+	userID domain.UserID,
+	questID domain.QuestID,
+	cb func(domain.Event),
 ) error {
-	// TODO(M1-13): wrap engine.Subscribe, filter by (userID, questID),
-	// replay quest_events history, then bridge live notifications.
-	return ErrNotImplemented
+	if userID == "" {
+		return fmt.Errorf("SubscribeQuest: %w: userID is required", ErrInvalidArgument)
+	}
+	if cb == nil {
+		return fmt.Errorf("SubscribeQuest: %w: callback is required", ErrInvalidArgument)
+	}
+
+	// 1. Tenancy gate. Wrong-tenant and missing-quest both fold
+	// into ErrNotFound (StoreBackend contract). A ctx-canceled
+	// error here means the caller bailed before we could check
+	// ownership — treat as a graceful close (return nil) rather
+	// than leaking a context error from the persistence seam.
+	row, err := s.store.GetQuest(ctx, userID, questID)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil
+		}
+		return mapStoreNotFound(err)
+	}
+	// If the quest is already terminal we can short-circuit after
+	// the replay: there will never be a live emission for it.
+	terminal := row.Status.IsTerminal()
+
+	// 2. Replay history. limit=0 means "no limit" at the store
+	// seam; the quest_events table is bounded by a quest's
+	// lifetime so an unbounded scan is acceptable for M1-13.
+	//
+	// A ctx-canceled error from the store is the caller already
+	// having walked away — return nil (graceful close), not the
+	// underlying context error, because SubscribeQuest's contract
+	// is "ctx.Done is the normal close signal, not an error".
+	history, err := s.store.ListQuestEvents(ctx, userID, questID, 0)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil
+		}
+		return fmt.Errorf("SubscribeQuest replay: %w", err)
+	}
+	for _, ev := range history {
+		// Honor ctx between replay events: a long history with a
+		// disconnecting client should not be forced to drain.
+		if cerr := ctx.Err(); cerr != nil {
+			return nil
+		}
+		cb(ev)
+	}
+
+	// Already-terminal quest: nothing live can arrive. We do not
+	// block on ctx — the caller wants the history and then a
+	// natural close.
+	if terminal {
+		return nil
+	}
+
+	// 3. Subscribe to the engine. Use a buffered channel so the
+	// engine's emit path is never blocked by a slow service cb
+	// (engine.Subscribe documents subscribers MUST NOT block). The
+	// buffer is generous enough to absorb a burst from a normal
+	// snipe run (Submitted -> Scheduled -> Released -> Found ->
+	// Booked is five events; 64 gives ample headroom).
+	const liveBuf = 64
+	live := make(chan domain.Event, liveBuf)
+	cancel := s.engine.Subscribe(func(n engine.Notification) {
+		if domain.QuestID(n.SnipeID) != questID {
+			return
+		}
+		// Non-blocking send: if the buffer is saturated the
+		// subscriber drops the event rather than stall the
+		// engine. A dropped event surfaces as a gap in the
+		// stream; transports that need at-most-once-with-replay
+		// can reconnect and pull history from the store.
+		select {
+		case live <- n.Event:
+		default:
+			s.logger.Warn("subscribe_quest.live_buffer_full",
+				slog.String("user", string(userID)),
+				slog.String("quest", string(questID)),
+				slog.String("event", string(n.Event.Type)),
+			)
+		}
+	})
+	defer cancel()
+
+	// 4. Pump. The subscriber runs on the engine's emit goroutine;
+	// cb runs here, on the caller's goroutine, in arrival order.
+	for {
+		select {
+		case <-ctx.Done():
+			// ctx cancellation is the documented graceful close
+			// signal for SubscribeQuest. Return nil so transports
+			// can treat "client went away" as a non-error.
+			return nil
+		case ev, ok := <-live:
+			if !ok {
+				// The channel is owned by this method — it never
+				// closes from the engine side. This branch is
+				// defensive: a future refactor that closes the
+				// channel can use it as a "stop streaming" signal.
+				return nil
+			}
+			cb(ev)
+			// Terminal-event short-circuit: once the quest reaches
+			// a final state no more emissions will arrive, so we
+			// can release the subscription early instead of
+			// pinning resources until ctx.Done.
+			if isTerminalEvent(ev.Type) {
+				return nil
+			}
+		}
+	}
+}
+
+// isTerminalEvent reports whether ev marks the snipe's lifecycle as
+// closed. Mirrors domain.Status.IsTerminal but on the event side so
+// SubscribeQuest does not need to load the snipe state after every
+// emission to decide whether to stop pumping.
+func isTerminalEvent(t domain.EventType) bool {
+	switch t {
+	case domain.EventBooked,
+		domain.EventFailed,
+		domain.EventCanceled,
+		domain.EventExpired:
+		return true
+	default:
+		return false
+	}
 }
 
 // defaultEventLimit caps the number of quest_events rows GetQuest

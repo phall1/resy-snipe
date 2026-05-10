@@ -118,6 +118,10 @@ var v1LegacyMethodAllowlist = []string{
 	"GetQuest",
 	"ListQuests",
 	"UpdateQuestStatus",
+	// ListQuestEvents filters quest_events on user_id at the SQL
+	// level. Package-level function (not on Store) so the harness
+	// would not flag it; listed here for documentation parity.
+	"ListQuestEvents",
 	// ListAccountsForUser/GetAccountByEmail filter accounts on
 	// user_id. Same package-level-function rationale as the quests
 	// peers.

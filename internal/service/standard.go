@@ -123,6 +123,21 @@ type StoreBackend interface {
 	// for (userID, questID). M1-10 implementations may return an
 	// empty slice — quest_events writes land in M1-11.
 	ListEvents(ctx context.Context, userID domain.UserID, questID domain.QuestID, limit int) ([]EventRow, error)
+
+	// ListQuestEvents returns the chronological replay of
+	// (userID, questID)'s persisted events. It is the history seam
+	// SubscribeQuest pumps through its callback before bridging the
+	// live engine stream (see docs/v2/design/service-layer.md
+	// §streaming). Ordering is oldest-first so the subscriber observes
+	// the same sequence a long-lived connection would have witnessed.
+	//
+	// limit <= 0 means "no limit". M1-13 callers always pass 0 and
+	// rely on quest_events being bounded by quest lifetime; future
+	// transports that page through history may supply a cap.
+	//
+	// Until M1-11 wires the quest_events writers this returns an
+	// empty slice — that is intentional, not an error condition.
+	ListQuestEvents(ctx context.Context, userID domain.UserID, questID domain.QuestID, limit int) ([]domain.Event, error)
 }
 
 // ResyAuthBackend is the slim auth seam the Service depends on for

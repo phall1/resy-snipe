@@ -371,12 +371,13 @@ func splitFlagsAndPositionals(args []string) (flags, positionals []string) {
 }
 
 // isKnownBoolFlag lists boolean flags exposed by the user-subcommand
-// flag sets. The split heuristic in splitFlagsAndPositionals consults
-// it to avoid pulling a positional arg into the "flag value" slot when
-// the preceding token is a bool flag like "-h" or "--help".
+// and quest-subcommand flag sets. The split heuristic in
+// splitFlagsAndPositionals consults it to avoid pulling a positional
+// arg into the "flag value" slot when the preceding token is a bool
+// flag like "-h", "--help", or "-yes".
 func isKnownBoolFlag(name string) bool {
 	switch name {
-	case "h", "help":
+	case "h", "help", "yes":
 		return true
 	}
 	return false

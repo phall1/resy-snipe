@@ -49,6 +49,18 @@ func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) erro
 	if len(args) > 1 && args[0] == "venue" && args[1] == "resolve" {
 		return runResolveCmd(context.Background(), args[2:], stdin, logOut, clk)
 	}
+	if len(args) > 1 && args[0] == "quest" {
+		switch args[1] {
+		case "plan":
+			return runQuestPlanCmd(context.Background(), args[2:], stdin, logOut, clk)
+		case "list":
+			return runQuestListCmd(context.Background(), args[2:], stdin, logOut, clk)
+		case "get":
+			return runQuestGetCmd(context.Background(), args[2:], stdin, logOut, clk)
+		case "cancel":
+			return runQuestCancelCmd(context.Background(), args[2:], stdin, logOut, clk)
+		}
+	}
 	if len(args) > 0 && args[0] == "user" {
 		return runUserCmd(context.Background(), args[1:], stdin, logOut, clk)
 	}

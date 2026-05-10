@@ -133,6 +133,12 @@ func (a *testStoreBackend) ListEvents(_ context.Context, _ domain.UserID, _ doma
 	return nil, nil
 }
 
+func (a *testStoreBackend) ListQuestEvents(
+	ctx context.Context, userID domain.UserID, questID domain.QuestID, limit int,
+) ([]domain.Event, error) {
+	return store.ListQuestEvents(ctx, a.store.DB(), userID, questID, limit)
+}
+
 // ---- fake resolver / provider / auth -------------------------------------
 
 type fakeResolver struct {
@@ -219,6 +225,7 @@ type harness struct {
 	svc     *service.Standard
 	db      *store.SQLiteStore
 	clk     *clock.Fake
+	eng     *engine.Engine
 	uid     domain.UserID
 	otherID domain.UserID
 	acctID  domain.AccountID
@@ -289,7 +296,7 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("service.New: %v", err)
 	}
 	return &harness{
-		svc: svc, db: sqlStore, clk: clk,
+		svc: svc, db: sqlStore, clk: clk, eng: eng,
 		uid: uid, otherID: otherUID, acctID: acctID,
 		venue: venue, prov: prov, auth: auth,
 	}
@@ -546,15 +553,6 @@ func TestStandardListAccountsScopedToUser(t *testing.T) {
 	}
 	if len(otherAccts) != 0 {
 		t.Errorf("other user accounts: got %d want 0", len(otherAccts))
-	}
-}
-
-func TestStandardSubscribeQuestNotImplemented(t *testing.T) {
-	t.Parallel()
-	h := newHarness(t)
-	err := h.svc.SubscribeQuest(t.Context(), h.uid, "q_xyz", func(domain.Event) {})
-	if !errors.Is(err, service.ErrNotImplemented) {
-		t.Errorf("SubscribeQuest: want ErrNotImplemented, got %v", err)
 	}
 }
 
