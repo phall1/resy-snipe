@@ -47,6 +47,12 @@ func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) erro
 	// to the existing snipe flow. Today only `login` is recognized;
 	// future subcommands (e.g. `logout`, `status`) plug in here.
 	if len(args) > 0 && args[0] == "login" {
+		// Parent ctx has no deadline because runLogin's prompt loop is
+		// interactive (the user types their email + password — could
+		// take any reasonable amount of time). runLogin wraps each
+		// individual HTTP call in its own timeout to satisfy invariant
+		// I-11 (every Resy HTTP call needs a deadline) without holding
+		// the typist hostage to it.
 		ctx := context.Background()
 		client, cleanup, err := openCLIClient(ctx,
 			newCLILogger(logOut, slog.LevelInfo), clk)

@@ -2,7 +2,6 @@ package resy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -157,11 +156,16 @@ type Response struct {
 	Header     http.Header
 }
 
-// errMissingCtxDeadline guards do() — every Resy HTTP call must run
-// under a ctx with a deadline so a misbehaving server cannot stall
-// the engine indefinitely. Callers must wrap their ctx in
-// context.WithTimeout (or rely on the engine's per-step deadline).
-var errMissingCtxDeadline = errors.New("resy: ctx has no deadline")
+// defaultPerCallTimeout caps any single Resy HTTP round-trip when the
+// caller's context does not already carry a deadline. It mirrors the
+// http.Client.Timeout ceiling so the practical worst case is the same
+// either way. Engine code that passes a long-lived lifetime context
+// (the snipe's lifetime, ctx.Background(), etc.) gets a deadline
+// derived here automatically — the alternative was forcing every call
+// site to wrap, which proved brittle when an engine refactor or a CLI
+// subcommand forgot one round trip and the binary failed at the
+// boundary instead of at the misbehaving server.
+const defaultPerCallTimeout = 30 * time.Second
 
 // do is the single transit point for Resy HTTP. authToken may be empty
 // for unauthenticated calls (login bootstrap). All standard headers
@@ -187,8 +191,14 @@ func (c *Client) doWithExtraHeaders(
 	authToken string,
 	extra map[string]string,
 ) ([]byte, *Response, error) {
+	// Apply a per-call deadline when the caller hasn't. The hard
+	// http.Client.Timeout ceiling above is the safety net; this
+	// derived ctx is what actually cancels NewRequestWithContext mid-
+	// flight if the server hangs after sending headers.
 	if _, ok := ctx.Deadline(); !ok {
-		return nil, nil, errMissingCtxDeadline
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultPerCallTimeout)
+		defer cancel()
 	}
 
 	fullURL := c.baseURL + path

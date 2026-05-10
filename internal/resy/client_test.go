@@ -170,7 +170,14 @@ func TestClientPostSendsFormBody(t *testing.T) {
 	}
 }
 
-func TestClientRequiresCtxDeadline(t *testing.T) {
+// TestClientNoCallerDeadlineDerivesOne is the post-I-11-fix
+// counterpart of the old TestClientRequiresCtxDeadline. The adapter
+// no longer rejects deadline-less callers — engine code legitimately
+// passes a snipe-lifetime context and the CLI's interactive login
+// loop can't predict how long the typist will take. Instead, the
+// adapter derives a 30s per-call ceiling internally
+// (`defaultPerCallTimeout`). The request itself must succeed.
+func TestClientNoCallerDeadlineDerivesOne(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -178,9 +185,12 @@ func TestClientRequiresCtxDeadline(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, _, err := resy.GetForTest(c, context.Background(), "/x", nil, "")
-	if err == nil || !strings.Contains(err.Error(), "deadline") {
-		t.Fatalf("expected ctx-deadline error, got %v", err)
+	resp, _, err := resy.GetForTest(c, context.Background(), "/x", nil, "")
+	if err != nil {
+		t.Fatalf("Get with no caller deadline should succeed; got %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
 }
 
