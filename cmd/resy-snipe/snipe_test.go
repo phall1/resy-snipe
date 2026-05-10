@@ -47,6 +47,10 @@ func (*snipeFakeProvider) ResolveVenue(context.Context, string, string) (domain.
 	return domain.Venue{}, providers.ErrVenueNotFound
 }
 
+func (*snipeFakeProvider) SearchVenuesByName(context.Context, string) ([]domain.Venue, error) {
+	return nil, nil
+}
+
 func (*snipeFakeProvider) Calendar(context.Context, domain.VenueRef, providers.DateRange) (providers.Calendar, error) {
 	return providers.Calendar{}, nil
 }

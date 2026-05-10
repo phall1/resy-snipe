@@ -126,6 +126,23 @@ type Provider interface {
 	// no such venue exists (typically HTTP 404). Other transit failures
 	// surface through the existing sentinel taxonomy.
 	ResolveVenue(ctx context.Context, slug, city string) (domain.Venue, error)
+	// SearchVenuesByName performs a freeform name search against the
+	// provider's venue-search endpoint (Resy: POST /3/venuesearch/search)
+	// and returns candidates in the provider's relevance order. Empty
+	// results return (nil, nil) — "no match" is a signal for the
+	// resolver to classify, not a transport error.
+	//
+	// The returned domain.Venue values are intentionally PARTIAL: search
+	// responses do not carry the timezone, release window, or other
+	// fields the engine needs at booking time. Callers that need a
+	// fully-populated Venue must follow up with ResolveVenue once the
+	// caller (typically a human picker) has chosen a candidate.
+	//
+	// An empty/whitespace query returns an input-validation error; the
+	// resolver classifies that as ErrVenueQueryMalformed. Transport and
+	// classification failures surface through the existing sentinel
+	// taxonomy.
+	SearchVenuesByName(ctx context.Context, query string) ([]domain.Venue, error)
 	Calendar(ctx context.Context, ref domain.VenueRef, r DateRange) (Calendar, error)
 	Find(ctx context.Context, req FindRequest) ([]Slot, error)
 	Book(ctx context.Context, slot Slot, sess Session) (Confirmation, error)

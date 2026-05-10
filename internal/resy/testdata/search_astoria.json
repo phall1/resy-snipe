@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "total_pages": 74,
+    "total": 221,
+    "page": 1,
+    "per_page": 3,
+    "engine": "ELASTIC"
+  },
+  "search": {
+    "nbHits": 221,
+    "page": 1,
+    "hitsPerPage": 3,
+    "hits": [
+      {
+        "id": {
+          "resy": 67463
+        },
+        "name": "Mayahuel",
+        "url_slug": "mayahuel",
+        "location": {
+          "id": 1,
+          "name": "New York",
+          "url_slug": "new-york-ny",
+          "code": "ny"
+        },
+        "neighborhood": "Astoria",
+        "locality": "New York",
+        "region": "NY",
+        "country": "United States",
+        "cuisine": [
+          "Mexican"
+        ]
+      },
+      {
+        "id": {
+          "resy": 50923
+        },
+        "name": "Rivercrest",
+        "url_slug": "rivercrest",
+        "location": {
+          "id": 1,
+          "name": "New York",
+          "url_slug": "new-york-ny",
+          "code": "ny"
+        },
+        "neighborhood": "Astoria",
+        "locality": "New York",
+        "region": "NY",
+        "country": "United States",
+        "cuisine": [
+          "American"
+        ]
+      },
+      {
+        "id": {
+          "resy": 65245
+        },
+        "name": "Sala - Astoria",
+        "url_slug": "sala-astoria",
+        "location": {
+          "id": 1,
+          "name": "New York",
+          "url_slug": "new-york-ny",
+          "code": "ny"
+        },
+        "neighborhood": "Astoria",
+        "locality": "New York",
+        "region": "NY",
+        "country": "United States",
+        "cuisine": [
+          "Spanish"
+        ]
+      }
+    ]
+  }
+}

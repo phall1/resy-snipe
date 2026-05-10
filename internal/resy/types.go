@@ -167,6 +167,49 @@ type VenueLocale struct {
 	TimeZone string `json:"time_zone"`
 }
 
+// SearchRequest is the JSON body Resy's POST /3/venuesearch/search
+// expects. Query is the freeform name; PerPage caps the hits Resy
+// returns; Types filters the result mix (we want only "venue").
+type SearchRequest struct {
+	Query   string   `json:"query"`
+	PerPage int      `json:"per_page"`
+	Types   []string `json:"types"`
+}
+
+// SearchResponse is the typed (and intentionally narrow) view of the
+// /3/venuesearch/search response. The wire payload is large — geoloc,
+// images, _highlightResult, collections, etc. — so we only name the
+// fields the name-resolver path consumes. Unrepresented keys stay in
+// the bytes and cost nothing to ignore.
+//
+// Hits arrive in Resy's relevance order; the adapter preserves it.
+type SearchResponse struct {
+	Search SearchBody `json:"search"`
+}
+
+// SearchBody wraps the "search" envelope on the response.
+type SearchBody struct {
+	Hits []SearchHit `json:"hits"`
+}
+
+// SearchHit is one venue in the search results. ID.Resy is the
+// integer venue id (stringified into Venue.Ref); Location.Code is
+// Resy's city slug ("ny", "washington-dc", ...), captured so the
+// follow-up ResolveVenue call can pair it with URLSlug without a
+// second round-trip.
+type SearchHit struct {
+	ID       VenueIdentBlock   `json:"id"`
+	Name     string            `json:"name"`
+	URLSlug  string            `json:"url_slug"`
+	Location SearchHitLocation `json:"location"`
+}
+
+// SearchHitLocation is the city descriptor on a search hit.
+type SearchHitLocation struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
 // CalendarRequest carries the query parameters for GET /4/venue/calendar.
 type CalendarRequest struct {
 	VenueID   string

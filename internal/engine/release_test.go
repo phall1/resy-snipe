@@ -43,6 +43,9 @@ func (*fakeProvider) SearchVenues(context.Context, providers.Query) ([]domain.Ve
 func (*fakeProvider) ResolveVenue(context.Context, string, string) (domain.Venue, error) {
 	return domain.Venue{}, providers.ErrVenueNotFound
 }
+func (*fakeProvider) SearchVenuesByName(context.Context, string) ([]domain.Venue, error) {
+	return nil, nil
+}
 func (*fakeProvider) Book(context.Context, providers.Slot, providers.Session) (providers.Confirmation, error) {
 	return providers.Confirmation{}, errors.New("fake: Book not used")
 }

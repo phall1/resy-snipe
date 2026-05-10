@@ -27,6 +27,9 @@ func (stubProvider) SearchVenues(context.Context, providers.Query) ([]domain.Ven
 func (stubProvider) ResolveVenue(context.Context, string, string) (domain.Venue, error) {
 	return domain.Venue{}, providers.ErrVenueNotFound
 }
+func (stubProvider) SearchVenuesByName(context.Context, string) ([]domain.Venue, error) {
+	return nil, nil
+}
 func (stubProvider) Calendar(context.Context, domain.VenueRef, providers.DateRange) (providers.Calendar, error) {
 	return providers.Calendar{}, nil
 }

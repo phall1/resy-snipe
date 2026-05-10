@@ -74,6 +74,21 @@ var v1LegacyMethodAllowlist = []string{
 	// are not per-user.
 	"UpsertObserved",
 	"GetObserved",
+	// UpsertVenueCache/GetVenueCache and UpsertNameSearchCache/
+	// GetNameSearchCache read/write the cross-tenant resolver caches
+	// (`venues_cache`, `name_search_cache`). Resy venue identity and
+	// name-search hits are public data — any homelab user benefits
+	// from a cached lookup, and no per-user information rides on
+	// these rows. See docs/v2/design/multi-user.md §10 (cross-tenant
+	// tables) and docs/v2/design/resolver.md §caching-contract.
+	// These are package-level functions, not Store interface
+	// methods, so the tenancy harness would not flag them even if
+	// they were omitted here; the entries serve as documentation of
+	// the cross-tenant exemption alongside their UpsertVenue peers.
+	"UpsertVenueCache",
+	"GetVenueCache",
+	"UpsertNameSearchCache",
+	"GetNameSearchCache",
 
 	// --- infrastructure ---
 	// DB returns the raw *sql.DB for tests. Not a user-data
