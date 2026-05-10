@@ -106,4 +106,25 @@ var v1LegacyMethodAllowlist = []string{
 	// DB returns the raw *sql.DB for tests. Not a user-data
 	// operation; production code goes through the Store interface.
 	"DB",
+
+	// --- v2 quest/account package-level functions (M1-10) ---
+	// CreateQuest/GetQuest/ListQuests/UpdateQuestStatus operate on
+	// the v2 `quests` table and every signature filters on
+	// domain.UserID at the SQL level. They are package-level
+	// functions (not on Store) so they sit outside the interface
+	// harness; listed here for documentation parity with the cache
+	// peers above.
+	"CreateQuest",
+	"GetQuest",
+	"ListQuests",
+	"UpdateQuestStatus",
+	// ListAccountsForUser/GetAccountByEmail filter accounts on
+	// user_id. Same package-level-function rationale as the quests
+	// peers.
+	"ListAccountsForUser",
+	"GetAccountByEmail",
+	// BindLegacyAccountToUser claims a NULL-user_id account row for
+	// a homelab user — the M1-10 Login bridge from the v1 session
+	// store to the v2 tenancy model. Same package-level rationale.
+	"BindLegacyAccountToUser",
 }

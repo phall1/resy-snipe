@@ -79,6 +79,13 @@ var openResolveBackendFn = openResolveBackend
 //     AmbiguousError — print the candidate list and return a non-nil
 //     error so main exits non-zero.
 //
+// Post-M1-10 the *service.Standard wiring (see service_wiring.go)
+// is the canonical entry point for CLI subcommands that need the
+// full backend (CreateQuest, GetQuest, ListQuests, Login).
+// runResolveCmd stays on the resolver-only path because resolve has
+// no persistence or scheduling concerns, and the existing test seam
+// (openResolveBackendFn) injects a fake provider + cache directly.
+//
 // The supplied out is where ALL user-visible output lands (resolved
 // venue render AND error messages). slog logs land on the same writer
 // at INFO level so the subcommand stays consistent with the rest of
