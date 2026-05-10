@@ -474,11 +474,18 @@ func TestObservedNotFound(t *testing.T) {
 	}
 }
 
-// storeUser writes a minimal users row directly via the DB accessor
-// so session FK constraints are satisfied. Users management isn't
-// surfaced by the Store interface in Phase 1.
+// storeUser writes a minimal accounts row directly via the DB
+// accessor so session FK constraints are satisfied. Pre-v2 this
+// inserted a users row; v2 (0002_v2_multi_user) rebound sessions
+// to accounts(id) and reserved users for homelab tenants, so the
+// legacy v1 Resy-email-as-UserID maps to accounts.resy_email
+// with a NULL user_id (M1-16 backfills the binding). The Store's
+// session bridge (UpsertSession et al.) discovers the row via
+// resy_email.
 func storeUser(s *store.SQLiteStore, id string) error {
 	_, err := s.DB().ExecContext(context.Background(),
-		`INSERT INTO users (id) VALUES (?)`, id)
+		`INSERT INTO accounts (id, user_id, resy_email, display_name, created_at)
+		 VALUES (?, NULL, ?, 'legacy-v1', 0)`,
+		"acct_legacy_"+id, id)
 	return err
 }

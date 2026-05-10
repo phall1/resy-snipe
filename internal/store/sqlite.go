@@ -425,32 +425,52 @@ func (s *SQLiteStore) ListEventsBySnipe(ctx context.Context, snipeID domain.Snip
 // Sessions --------------------------------------------------------------
 
 func (s *SQLiteStore) UpsertSession(ctx context.Context, sess SessionRow) error {
-	// sessions.user_id has a FK constraint to users.id (see
-	// migrations/0001_initial.sql). The session-only path the resy
-	// adapter calls during Login does not pass through any
-	// users-creating code, so we ensure-or-ignore the parent row in
-	// the same transaction. INSERT OR IGNORE is idempotent on the
-	// PRIMARY KEY collision and never overwrites a user's created_at.
+	// v2 bridge: SessionRow.UserID is still a Resy email (the v1
+	// domain.UserID), but sessions now FK to accounts(id), not
+	// users(id) (migrations/0002_v2_multi_user.sql). We map
+	// UserID -> accounts.resy_email -> accounts.id, ensuring-or-
+	// creating an account row in the same transaction. The
+	// account's user_id is left NULL — M1-16 (operator seeding +
+	// data adoption) is what binds these v1-imported rows to a
+	// homelab user.
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("UpsertSession: begin: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx,
-		`INSERT OR IGNORE INTO users (id) VALUES (?)`,
-		string(sess.UserID)); err != nil {
-		return fmt.Errorf("UpsertSession: ensure user: %w", err)
+	// INSERT OR IGNORE on the (user_id, resy_email) UNIQUE
+	// constraint is idempotent for the (NULL, email) shape too,
+	// because SQLite's UNIQUE treats NULLs as distinct — so we add
+	// our own existence check first. Note: we cannot fold both
+	// branches into ON CONFLICT because the conflict target column
+	// (resy_email alone) is not unique.
+	var acctID string
+	row := tx.QueryRowContext(ctx,
+		`SELECT id FROM accounts WHERE user_id IS NULL AND resy_email = ?`,
+		string(sess.UserID))
+	switch err := row.Scan(&acctID); {
+	case errors.Is(err, sql.ErrNoRows):
+		acctID = "acct_legacy_" + string(sess.UserID)
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO accounts (id, user_id, resy_email, display_name, created_at)
+			VALUES (?, NULL, ?, 'legacy-v1', ?)`,
+			acctID, string(sess.UserID), sess.CreatedAt.UnixMilli(),
+		); err != nil {
+			return fmt.Errorf("UpsertSession: ensure account: %w", err)
+		}
+	case err != nil:
+		return fmt.Errorf("UpsertSession: lookup account: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO sessions (user_id, provider, jwt, exp, created_at, updated_at)
+		INSERT INTO sessions (account_id, provider, jwt, exp, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(user_id, provider) DO UPDATE SET
+		ON CONFLICT(account_id, provider) DO UPDATE SET
 			jwt = excluded.jwt,
 			exp = excluded.exp,
 			updated_at = excluded.updated_at`,
-		string(sess.UserID),
+		acctID,
 		string(sess.Provider),
 		sess.JWT,
 		formatTime(sess.ExpiresAt),
@@ -472,9 +492,15 @@ func (s *SQLiteStore) GetSession(
 	provider domain.ProviderID,
 	now time.Time,
 ) (SessionRow, error) {
+	// v2 bridge: sessions now FK to accounts(id); v1 domain.UserID
+	// is the Resy email, which lives on accounts.resy_email. We
+	// join to recover it. See UpsertSession comment for the rest of
+	// the bridge.
 	row := s.db.QueryRowContext(ctx, `
-		SELECT user_id, provider, jwt, exp, created_at, updated_at
-		FROM sessions WHERE user_id = ? AND provider = ?`,
+		SELECT a.resy_email, s.provider, s.jwt, s.exp, s.created_at, s.updated_at
+		FROM sessions s
+		JOIN accounts a ON a.id = s.account_id
+		WHERE a.resy_email = ? AND s.provider = ?`,
 		string(user), string(provider))
 
 	var (
@@ -516,9 +542,13 @@ func (s *SQLiteStore) GetSession(
 }
 
 func (s *SQLiteStore) DeleteSession(ctx context.Context, user domain.UserID, provider domain.ProviderID) error {
-	_, err := s.db.ExecContext(ctx,
-		`DELETE FROM sessions WHERE user_id = ? AND provider = ?`,
-		string(user), string(provider))
+	// v2 bridge: same UserID->resy_email indirection as GetSession.
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM sessions
+		WHERE provider = ? AND account_id IN (
+			SELECT id FROM accounts WHERE resy_email = ?
+		)`,
+		string(provider), string(user))
 	if err != nil {
 		return fmt.Errorf("DeleteSession: %w", err)
 	}

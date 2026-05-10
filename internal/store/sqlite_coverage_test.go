@@ -988,10 +988,11 @@ func TestGetSessionRejectsBadExp(t *testing.T) {
 	if err := storeUser(s, "u_badexp"); err != nil {
 		t.Fatal(err)
 	}
+	// v2 sessions FK to accounts(id); storeUser made acct_legacy_u_badexp.
 	_, err := s.DB().ExecContext(ctx,
-		`INSERT INTO sessions (user_id, provider, jwt, exp, created_at, updated_at)
+		`INSERT INTO sessions (account_id, provider, jwt, exp, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		"u_badexp", "resy", "jwt", "NOT-A-TIMESTAMP",
+		"acct_legacy_u_badexp", "resy", "jwt", "NOT-A-TIMESTAMP",
 		"2026-05-01T09:00:00Z", "2026-05-01T09:00:00Z")
 	if err != nil {
 		t.Fatalf("seed: %v", err)

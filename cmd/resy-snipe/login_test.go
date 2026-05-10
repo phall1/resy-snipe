@@ -486,15 +486,21 @@ func mkdirAllForTest(t *testing.T, path string) {
 	}
 }
 
-// seedUser inserts a row into the users table so a subsequent
-// UpsertSession does not violate the (sessions.user_id ->
-// users.id) FK constraint. The schema enforces this; the resy
-// adapter's UpsertSession path expects the row to already exist
-// (user-creation is owned upstream of this seam).
+// seedUser pre-creates an `accounts` row so a subsequent
+// UpsertSession's FK lookup (sessions.account_id -> accounts.id)
+// succeeds. Pre-v2 (migration 0002_v2_multi_user) this inserted into
+// `users`; v2 moved the Resy-login table to `accounts` and reserved
+// `users` for homelab tenants. The legacy v1 UserID (a Resy email)
+// is parked on `accounts.resy_email` with NULL user_id until M1-16
+// adopts these rows under the operator. The Store's session bridge
+// (internal/store/sqlite.go UpsertSession et al.) reaches the row by
+// resy_email.
 func seedUser(t *testing.T, s *store.SQLiteStore, id string) {
 	t.Helper()
 	if _, err := s.DB().ExecContext(context.Background(),
-		`INSERT INTO users (id) VALUES (?)`, id); err != nil {
+		`INSERT INTO accounts (id, user_id, resy_email, display_name, created_at)
+		 VALUES (?, NULL, ?, 'legacy-v1', 0)`,
+		"acct_legacy_"+id, id); err != nil {
 		t.Fatalf("seed user %q: %v", id, err)
 	}
 }
