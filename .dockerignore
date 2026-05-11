@@ -1,0 +1,49 @@
+# Keep the build context small so iterative `docker build` is fast and
+# nothing private leaks into image layers.
+
+# VCS metadata — not needed at build time; git is invoked by go mod
+# download but it does not read .git.
+.git
+.gitignore
+.github
+
+# Local build artifacts.
+bin/
+out/
+*.test
+*.out
+coverage.out
+resy-snipe
+
+# Editor / OS noise.
+.DS_Store
+.idea/
+.vscode/
+
+# CI / lint configs that aren't read by `go build`.
+.golangci.yml
+lefthook.yml
+.lefthook-local.yml
+
+# Documentation — large and irrelevant to the build. The image needs
+# only Go source + go.mod/go.sum.
+docs/
+deploy/
+README.md
+AGENTS.md
+CLAUDE.md
+*.gif
+*.png
+
+# Test fixtures + tmp data that may live alongside the repo.
+_legacy/
+testdata/local/
+
+# Anything resembling secrets — defense in depth even though we never
+# commit these.
+*.env
+.env*
+*.pem
+*.key
+secret.key
+key.hex

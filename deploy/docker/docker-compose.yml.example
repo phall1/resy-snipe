@@ -1,0 +1,76 @@
+# resy-snipe docker-compose example (per docs/v2/design/daemon.md §9.3).
+#
+# This is an .example file; copy to docker-compose.yml and adjust:
+#   1. Build the image:    docker build -t resy-snipe:local .
+#   2. Provision a keyfile: head -c 32 /dev/urandom > ./secrets/key.hex
+#      chmod 0400 ./secrets/key.hex
+#   3. Write a config:     cp ./config.example.toml ./config/config.toml
+#   4. Start:              docker compose up -d
+#   5. Smoke-test:         curl http://127.0.0.1:7765/healthz
+#
+# The container binds 0.0.0.0:7765 inside its network namespace; the
+# host port mapping `127.0.0.1:7765:7765` is what constrains exposure
+# — only loopback on the host can reach it. A front-of-house Caddy /
+# Traefik / nginx handles TLS per ADR-0009.
+
+services:
+  resy-snipe:
+    image: resy-snipe:local
+    # Or pull from the operator's registry once a release lands:
+    #   image: ghcr.io/phall1/resy-snipe:2.0.0
+    container_name: resy-snipe
+    restart: unless-stopped
+    user: "65532:65532" # distroless nonroot; matches Dockerfile.
+    ports:
+      # Loopback-only host binding. A reverse proxy on the same host
+      # reaches us at 127.0.0.1:7765; nothing on the LAN can.
+      - "127.0.0.1:7765:7765"
+    volumes:
+      # SQLite DB + flock + audit log persistence. Owned by uid 65532
+      # on the host: `sudo chown -R 65532:65532 ./data` before first
+      # start.
+      - ./data:/var/lib/resy-snipe
+      # Read-only config + keyfile. The container reads /etc/resy-snipe
+      # at boot; both files mount read-only.
+      - ./config/config.toml:/etc/resy-snipe/config.toml:ro
+    environment:
+      # Bind 0.0.0.0 inside the namespace — Docker port-mapping handles
+      # exposure. Override the default 127.0.0.1 from DefaultConfig so
+      # the listener actually accepts the mapped traffic.
+      RESY_SNIPE_BIND: "0.0.0.0:7765"
+      # Optional: enable the anti-bot signer subprocess by mounting a
+      # binary and pointing the daemon at it.
+      # RESY_SNIPE_SIGNER_BIN: /usr/local/bin/resy-sign
+    secrets:
+      - keyfile
+    # Override the Dockerfile's default CMD to point at the keyfile-
+    # mounted secret. The daemon reads the 32-byte master key from
+    # /run/secrets/keyfile (Docker mounts secrets at that path by
+    # convention).
+    command:
+      - serve
+      - --config=/etc/resy-snipe/config.toml
+    # Conservative resource limits — tune to taste.
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    healthcheck:
+      # /healthz is unauthenticated and always 200 when the listener
+      # is up. /readyz is the stricter check (DB ping + sealer); use
+      # whichever matches your tolerance for restart noise.
+      test:
+        - CMD-SHELL
+        - "wget -q -O- http://127.0.0.1:7765/healthz || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+secrets:
+  # The keyfile contains 32 bytes of /dev/urandom; the daemon reads it
+  # at boot and never persists it. Loss of the keyfile means loss of
+  # the sealed secrets — back it up offline.
+  keyfile:
+    file: ./secrets/key.hex

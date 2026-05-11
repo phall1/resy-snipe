@@ -1,0 +1,55 @@
+# Example resy-snipe config.toml for the docker-compose deployment.
+# Copy to ./config/config.toml and adjust as needed.
+#
+# Field reference: see docs/v2/design/daemon.md §3.2.
+
+[daemon]
+# Bind 0.0.0.0 inside the container's network namespace; the
+# compose port-mapping (127.0.0.1:7765:7765) constrains exposure.
+# The env var RESY_SNIPE_BIND in docker-compose.yml takes precedence
+# over this value — keep both in sync for clarity.
+bind = "0.0.0.0:7765"
+
+# Data directory is the volume-mounted /var/lib/resy-snipe.
+data_dir = "/var/lib/resy-snipe"
+
+# JSON logs ship to docker's log driver. Use `info` in production;
+# bump to `debug` while investigating an incident.
+log_format = "json"
+log_level = "info"
+
+# Graceful shutdown drain budget (seconds). Set high enough that any
+# in-flight SSE subscribers can complete; low enough that an unhealthy
+# orchestrator can replace the container quickly.
+shutdown_drain_seconds = 15
+
+[secrets]
+# `keyfile` reads a 32-byte master key from `keyfile` below. The other
+# valid modes are `passphrase` (interactive on stdin — not compatible
+# with a non-interactive container) and `insecure` (dev-only; the
+# tripwire refuses to honor this in /.dockerenv environments).
+mode = "keyfile"
+keyfile = "/run/secrets/keyfile"
+
+[http]
+# Behind a host-side reverse proxy that terminates TLS and sets the
+# X-Forwarded-* headers. Trust only that proxy's CIDR — leaving the
+# default `127.0.0.0/8` here works when the proxy runs on the host
+# network and connects via 127.0.0.1. Add the proxy's container IP if
+# both run inside a Docker bridge network.
+trusted_proxies = ["127.0.0.0/8", "172.16.0.0/12"]
+
+# Set to the externally-visible URL the proxy serves; the daemon
+# stitches this into invite tokens, audit-log links, etc.
+# external_url = "https://reservations.example.com"
+
+[signer]
+# The anti-bot signer subprocess is optional and not baked into the
+# image. To enable: mount your signer binary into the container and
+# set RESY_SNIPE_SIGNER_BIN (or the bin key below) to its path.
+# bin = "/usr/local/bin/resy-sign"
+restart_backoff_seconds = 5
+
+[engine]
+max_concurrent_bookings = 4
+default_lookahead_days = 60
