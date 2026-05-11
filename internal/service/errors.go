@@ -16,9 +16,17 @@ var (
 	// leaking cross-tenant existence.
 	ErrNotFound = errors.New("service: not found")
 
-	// ErrUnauthorized is returned when the caller's token is missing,
-	// invalid, or lacks the required role for the action.
+	// ErrUnauthorized is returned when the caller's token is missing
+	// or invalid (HTTP 401). For an authenticated caller whose scope
+	// is insufficient for the verb, see ErrForbidden.
 	ErrUnauthorized = errors.New("service: unauthorized")
+
+	// ErrForbidden is returned when the caller is authenticated but
+	// their token scope does not permit the action (HTTP 403). The
+	// HTTP middleware never produces this directly — the Service
+	// layer makes the decision so the role contract lives next to
+	// the verbs it gates (design/daemon.md §4.2).
+	ErrForbidden = errors.New("service: forbidden")
 
 	// ErrConflict is returned when an idempotency key is reused with a
 	// different action target.

@@ -80,11 +80,14 @@ func (f *fakeQuestService) InviteUser(_ context.Context, _ domain.UserID, _, _ s
 func (f *fakeQuestService) AcceptInvite(_ context.Context, _, _, _ string) (domain.UserID, service.BearerToken, error) {
 	return "", service.BearerToken{}, service.ErrNotImplemented
 }
-func (f *fakeQuestService) RotateToken(_ context.Context, _ domain.UserID, _ string) (service.BearerToken, error) {
+func (f *fakeQuestService) IssueToken(_ context.Context, _ domain.UserID, _, _ string) (service.BearerToken, error) {
 	return service.BearerToken{}, service.ErrNotImplemented
 }
 func (f *fakeQuestService) RevokeToken(_ context.Context, _ domain.UserID, _ string) error {
 	return service.ErrNotImplemented
+}
+func (f *fakeQuestService) ListTokens(_ context.Context, _ domain.UserID) ([]service.Token, error) {
+	return nil, service.ErrNotImplemented
 }
 func (f *fakeQuestService) ListUsers(_ context.Context, _ domain.UserID) ([]service.User, error) {
 	return nil, service.ErrNotImplemented

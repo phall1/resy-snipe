@@ -267,6 +267,63 @@ func (a *serviceStoreAdapter) WriteQuestEvent(
 	return store.WriteQuestEvent(ctx, a.store.DB(), userID, questID, evt)
 }
 
+// InsertToken delegates to store.InsertToken, repacking the service-
+// side TokenRecord into the store-side TokenRow. Field-for-field
+// passthrough — the two shapes carry the same columns by design.
+func (a *serviceStoreAdapter) InsertToken(ctx context.Context, t service.TokenRecord) error {
+	return store.InsertToken(ctx, a.store.DB(), store.TokenRow{
+		ID:        t.ID,
+		UserID:    t.UserID,
+		Hash:      t.Hash,
+		Scopes:    t.Scope,
+		Label:     t.Label,
+		CreatedAt: t.CreatedAt,
+		LastSeen:  t.LastSeen,
+		RevokedAt: t.RevokedAt,
+	})
+}
+
+// ListTokensForUser delegates to store.ListTokensForUser and repacks
+// each row into the service-side projection.
+func (a *serviceStoreAdapter) ListTokensForUser(
+	ctx context.Context,
+	userID domain.UserID,
+) ([]service.TokenRecord, error) {
+	rows, err := store.ListTokensForUser(ctx, a.store.DB(), userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]service.TokenRecord, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, service.TokenRecord{
+			ID:        r.ID,
+			UserID:    r.UserID,
+			Hash:      r.Hash,
+			Scope:     r.Scopes,
+			Label:     r.Label,
+			CreatedAt: r.CreatedAt,
+			LastSeen:  r.LastSeen,
+			RevokedAt: r.RevokedAt,
+		})
+	}
+	return out, nil
+}
+
+// RevokeToken delegates to store.RevokeToken and folds
+// store.ErrNotFound into service.ErrNotFound.
+func (a *serviceStoreAdapter) RevokeToken(
+	ctx context.Context,
+	userID domain.UserID,
+	tokenID string,
+	now time.Time,
+) error {
+	err := store.RevokeToken(ctx, a.store.DB(), userID, tokenID, now)
+	if err != nil && errors.Is(err, store.ErrNotFound) {
+		return service.ErrNotFound
+	}
+	return err
+}
+
 func toServiceQuestRow(r store.QuestRow) service.QuestRow {
 	return service.QuestRow{
 		ID:          r.ID,

@@ -60,6 +60,22 @@ type AccountRow struct {
 	DisabledAt  *time.Time
 }
 
+// TokenRecord is the on-disk projection of one tokens row, consumer-
+// side per Law 5. Mirrors store.TokenRow at the field level. Hash is
+// the BLAKE2b-256 digest of the plaintext token; the plaintext itself
+// is returned once at IssueToken time and never persisted. Scope is
+// 'user' or 'operator'.
+type TokenRecord struct {
+	ID        string
+	UserID    domain.UserID
+	Hash      []byte
+	Scope     string
+	Label     string
+	CreatedAt time.Time
+	LastSeen  *time.Time
+	RevokedAt *time.Time
+}
+
 // EventRow is the consumer-side projection of one quest_events row.
 // GetQuest assembles a QuestState's Events from these. M1-10 returns
 // an empty list (the engine writes to the v1 events table by
@@ -199,6 +215,22 @@ type StoreBackend interface {
 	// Service bridges those into this seam so subsequent GetQuest /
 	// SubscribeQuest calls can replay history.
 	WriteQuestEvent(ctx context.Context, userID domain.UserID, questID domain.QuestID, evt domain.Event) error
+
+	// InsertToken persists a freshly-minted bearer token (Service.
+	// IssueToken). The Service hashes the plaintext and supplies the
+	// row verbatim; the store does not read the wall clock (Law 7).
+	InsertToken(ctx context.Context, t TokenRecord) error
+
+	// ListTokensForUser returns userID's tokens (live and revoked).
+	// Cross-tenant operator listing is a different path.
+	ListTokensForUser(ctx context.Context, userID domain.UserID) ([]TokenRecord, error)
+
+	// RevokeToken stamps the (userID, tokenID) token as revoked.
+	// Wrong-tenant or missing tokenID surfaces as ErrNotFound;
+	// already-revoked is also ErrNotFound (the design has no separate
+	// sentinel — re-revoking a dead credential is operationally a
+	// no-op).
+	RevokeToken(ctx context.Context, userID domain.UserID, tokenID string, now time.Time) error
 }
 
 // AuditWrite is the consumer-side projection of one audit_events row,

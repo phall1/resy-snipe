@@ -49,11 +49,14 @@ func TestStubReturnsNotImplemented(t *testing.T) {
 	if _, _, err := s.AcceptInvite(ctx, "tok", "a@b.c", "pw"); !errors.Is(err, ErrNotImplemented) {
 		t.Errorf("AcceptInvite: want ErrNotImplemented, got %v", err)
 	}
-	if _, err := s.RotateToken(ctx, uid, "cli"); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("RotateToken: want ErrNotImplemented, got %v", err)
+	if _, err := s.IssueToken(ctx, uid, "cli", "user"); !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("IssueToken: want ErrNotImplemented, got %v", err)
 	}
 	if err := s.RevokeToken(ctx, uid, "t-1"); !errors.Is(err, ErrNotImplemented) {
 		t.Errorf("RevokeToken: want ErrNotImplemented, got %v", err)
+	}
+	if _, err := s.ListTokens(ctx, uid); !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("ListTokens: want ErrNotImplemented, got %v", err)
 	}
 	if _, err := s.ListUsers(ctx, uid); !errors.Is(err, ErrNotImplemented) {
 		t.Errorf("ListUsers: want ErrNotImplemented, got %v", err)
@@ -67,6 +70,7 @@ func TestSentinelsAreDistinct(t *testing.T) {
 		"ErrNotImplemented":      ErrNotImplemented,
 		"ErrNotFound":            ErrNotFound,
 		"ErrUnauthorized":        ErrUnauthorized,
+		"ErrForbidden":           ErrForbidden,
 		"ErrConflict":            ErrConflict,
 		"ErrInvalidPlanHash":     ErrInvalidPlanHash,
 		"ErrVenueNotFound":       ErrVenueNotFound,

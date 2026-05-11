@@ -43,8 +43,9 @@ const (
 	actionAccountList    = "account.list"
 	actionUserInvite     = "user.invite"
 	actionInviteAccept   = "user.accept"
-	actionTokenRotate    = "token.rotate"
+	actionTokenIssue     = "token.issue"
 	actionTokenRevoke    = "token.revoke"
+	actionTokenList      = "token.list"
 	actionUserList       = "user.list"
 )
 
@@ -112,6 +113,8 @@ func errorCodeFor(err error) string {
 		return "not_found"
 	case errors.Is(err, ErrUnauthorized):
 		return "unauthorized"
+	case errors.Is(err, ErrForbidden):
+		return "forbidden"
 	case errors.Is(err, ErrConflict):
 		return "conflict"
 	case errors.Is(err, ErrInvalidPlanHash):

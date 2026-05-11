@@ -64,13 +64,24 @@ type Service interface {
 	// Unauthenticated: token is the only credential.
 	AcceptInvite(ctx context.Context, token, email, password string) (domain.UserID, BearerToken, error)
 
-	// RotateToken issues a fresh bearer token for the caller under
-	// the given label. Operator-only at the transport level.
-	RotateToken(ctx context.Context, userID domain.UserID, label string) (BearerToken, error)
+	// IssueToken mints a fresh bearer token under the supplied label
+	// and scope ('user' | 'operator') for the given user. The
+	// plaintext token is returned exactly once on BearerToken.Token —
+	// the daemon stores only its BLAKE2b digest. Operator-tier scope
+	// is enforced by the caller (the HTTP layer rejects non-operator
+	// scope on the /v1/auth/tokens route).
+	IssueToken(ctx context.Context, userID domain.UserID, label, scope string) (BearerToken, error)
 
-	// RevokeToken invalidates the bearer token identified by tokenID.
-	// Operator-only at the transport level.
+	// RevokeToken invalidates the bearer token identified by tokenID
+	// (the public ULID handle), so long as it belongs to userID. A
+	// missing or already-revoked tokenID surfaces as ErrNotFound.
 	RevokeToken(ctx context.Context, userID domain.UserID, tokenID string) error
+
+	// ListTokens returns userID's tokens (live and revoked) for the
+	// per-user view — operator listing across tenants goes through a
+	// separate path. Plaintext is never included; the daemon only
+	// stores hashes.
+	ListTokens(ctx context.Context, userID domain.UserID) ([]Token, error)
 
 	// ListUsers returns every homelab tenant. Operator-only at the
 	// transport level.

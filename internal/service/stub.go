@@ -70,14 +70,19 @@ func (Stub) AcceptInvite(_ context.Context, _, _, _ string) (domain.UserID, Bear
 	return "", BearerToken{}, ErrNotImplemented
 }
 
-// RotateToken implements Service.
-func (Stub) RotateToken(_ context.Context, _ domain.UserID, _ string) (BearerToken, error) {
+// IssueToken implements Service.
+func (Stub) IssueToken(_ context.Context, _ domain.UserID, _, _ string) (BearerToken, error) {
 	return BearerToken{}, ErrNotImplemented
 }
 
 // RevokeToken implements Service.
 func (Stub) RevokeToken(_ context.Context, _ domain.UserID, _ string) error {
 	return ErrNotImplemented
+}
+
+// ListTokens implements Service.
+func (Stub) ListTokens(_ context.Context, _ domain.UserID) ([]Token, error) {
+	return nil, ErrNotImplemented
 }
 
 // ListUsers implements Service.

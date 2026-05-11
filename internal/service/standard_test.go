@@ -198,6 +198,56 @@ func (a *testStoreBackend) WriteQuestEvent(
 	return store.WriteQuestEvent(ctx, a.store.DB(), userID, questID, evt)
 }
 
+func (a *testStoreBackend) InsertToken(ctx context.Context, t service.TokenRecord) error {
+	return store.InsertToken(ctx, a.store.DB(), store.TokenRow{
+		ID:        t.ID,
+		UserID:    t.UserID,
+		Hash:      t.Hash,
+		Scopes:    t.Scope,
+		Label:     t.Label,
+		CreatedAt: t.CreatedAt,
+		LastSeen:  t.LastSeen,
+		RevokedAt: t.RevokedAt,
+	})
+}
+
+func (a *testStoreBackend) ListTokensForUser(
+	ctx context.Context,
+	userID domain.UserID,
+) ([]service.TokenRecord, error) {
+	rows, err := store.ListTokensForUser(ctx, a.store.DB(), userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]service.TokenRecord, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, service.TokenRecord{
+			ID:        r.ID,
+			UserID:    r.UserID,
+			Hash:      r.Hash,
+			Scope:     r.Scopes,
+			Label:     r.Label,
+			CreatedAt: r.CreatedAt,
+			LastSeen:  r.LastSeen,
+			RevokedAt: r.RevokedAt,
+		})
+	}
+	return out, nil
+}
+
+func (a *testStoreBackend) RevokeToken(
+	ctx context.Context,
+	userID domain.UserID,
+	tokenID string,
+	now time.Time,
+) error {
+	err := store.RevokeToken(ctx, a.store.DB(), userID, tokenID, now)
+	if err != nil && errors.Is(err, store.ErrNotFound) {
+		return service.ErrNotFound
+	}
+	return err
+}
+
 // ---- fake resolver / provider / auth -------------------------------------
 
 type fakeResolver struct {
@@ -625,12 +675,6 @@ func TestStandardDeferredOperatorVerbsReturnNotImplemented(t *testing.T) {
 	}
 	if _, _, err := h.svc.AcceptInvite(ctx, "tok", "a@b.c", "pw"); !errors.Is(err, service.ErrNotImplemented) {
 		t.Errorf("AcceptInvite: %v", err)
-	}
-	if _, err := h.svc.RotateToken(ctx, h.uid, "cli"); !errors.Is(err, service.ErrNotImplemented) {
-		t.Errorf("RotateToken: %v", err)
-	}
-	if err := h.svc.RevokeToken(ctx, h.uid, "tok-1"); !errors.Is(err, service.ErrNotImplemented) {
-		t.Errorf("RevokeToken: %v", err)
 	}
 	if _, err := h.svc.ListUsers(ctx, h.uid); !errors.Is(err, service.ErrNotImplemented) {
 		t.Errorf("ListUsers: %v", err)

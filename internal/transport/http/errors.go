@@ -60,6 +60,8 @@ func MapError(err error) ErrorMapping {
 		return ErrorMapping{http.StatusUnauthorized, "token_revoked"}
 	case errors.Is(err, service.ErrUnauthorized):
 		return ErrorMapping{http.StatusUnauthorized, "unauthenticated"}
+	case errors.Is(err, service.ErrForbidden):
+		return ErrorMapping{http.StatusForbidden, "forbidden"}
 	case errors.Is(err, service.ErrVenueNotFound):
 		return ErrorMapping{http.StatusNotFound, "venue_not_found"}
 	case errors.Is(err, service.ErrNotFound):

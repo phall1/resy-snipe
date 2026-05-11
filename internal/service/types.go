@@ -91,12 +91,30 @@ type Invite struct {
 	ExpiresAt time.Time
 }
 
-// BearerToken is the credential RotateToken returns. Token is the
-// plaintext value; only its hash is stored. ExpiresAt is nil for
-// long-lived operator tokens.
+// BearerToken is the credential IssueToken returns. Token is the
+// plaintext value, returned exactly once at issuance — only its hash
+// is stored. ID is the public ULID handle (the path parameter for
+// DELETE /v1/auth/tokens/{id}); Scope is the role tier the daemon
+// enforces at the Service layer ('user' or 'operator').
 type BearerToken struct {
+	ID        string
 	Token     string
 	Label     string
+	Scope     string
 	CreatedAt time.Time
-	ExpiresAt *time.Time
+}
+
+// Token is the listing projection — what GET /v1/auth/tokens (and the
+// CLI's `user list-tokens`) surface. The plaintext bearer is NOT in
+// this shape; the daemon stores only its hash. LastSeen is nil until
+// the token has been used for authentication at least once;
+// RevokedAt is nil while the token is live.
+type Token struct {
+	ID        string
+	UserID    domain.UserID
+	Scope     string
+	Label     string
+	CreatedAt time.Time
+	LastSeen  *time.Time
+	RevokedAt *time.Time
 }

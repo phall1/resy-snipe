@@ -107,13 +107,14 @@ func TestAuditWriteEveryServiceMethod(t *testing.T) {
 		t.Errorf("account.login audit: got %+v", rows)
 	}
 
-	// Operator-admin stubs — each writes an ok=false row with
-	// error_code = not_implemented.
+	// Operator-admin stubs still pending — each writes an ok=false
+	// row with error_code = not_implemented. (IssueToken / RevokeToken
+	// / ListTokens are now live and exercised by their own tests in
+	// standard_tokens_test.go; this loop covers only what remains
+	// stubbed.)
 	_, _ = h.svc.InviteUser(ctx, h.uid, "x@y.z", "user")
-	_, _ = h.svc.RotateToken(ctx, h.uid, "cli")
-	_ = h.svc.RevokeToken(ctx, h.uid, "tok-1")
 	_, _ = h.svc.ListUsers(ctx, h.uid)
-	for _, a := range []string{"user.invite", "token.rotate", "token.revoke", "user.list"} {
+	for _, a := range []string{"user.invite", "user.list"} {
 		rows := listAuditByAction(t, h, h.uid, a)
 		if len(rows) != 1 || rows[0].OK || rows[0].ErrorCode != "not_implemented" {
 			t.Errorf("%s audit: got %+v", a, rows)
