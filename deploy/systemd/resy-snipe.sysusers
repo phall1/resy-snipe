@@ -1,0 +1,7 @@
+# /etc/sysusers.d/resy-snipe.conf
+#
+# Creates the unprivileged system user the daemon runs as.
+# Apply with: systemd-sysusers
+#
+# Format: type name id gecos home shell
+u resy-snipe - "resy-snipe daemon" /var/lib/resy-snipe /usr/sbin/nologin

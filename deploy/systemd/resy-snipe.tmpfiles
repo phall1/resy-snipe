@@ -1,0 +1,13 @@
+# /etc/tmpfiles.d/resy-snipe.conf
+#
+# Ensures /etc/resy-snipe exists with the right ownership/perms so the
+# resy-snipe user can read config.toml and key.hex (group-readable),
+# while keeping the directory non-world-readable.
+#
+# Apply with: systemd-tmpfiles --create
+#
+# /var/lib/resy-snipe is managed by StateDirectory= in the unit file
+# and does not need a tmpfiles entry.
+#
+# Type Path                Mode UID  GID         Age Argument
+d      /etc/resy-snipe     0750 root resy-snipe  -   -

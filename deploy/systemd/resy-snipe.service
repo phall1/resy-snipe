@@ -1,0 +1,108 @@
+# resy-snipe.service
+#
+# systemd unit for the resy-snipe daemon. Install at:
+#   /etc/systemd/system/resy-snipe.service
+#
+# Companion files:
+#   - resy-snipe.sysusers  -> /etc/sysusers.d/resy-snipe.conf
+#   - resy-snipe.tmpfiles  -> /etc/tmpfiles.d/resy-snipe.conf
+#
+# Prerequisites:
+#   - /usr/local/bin/resy-snipe binary installed (mode 0755).
+#   - /etc/resy-snipe/config.toml present.
+#   - Secrets keyfile at /etc/resy-snipe/key.hex (mode 0400, owned by
+#     resy-snipe) OR a passphrase delivered via LoadCredential=.
+#   - /var/lib/resy-snipe created via tmpfiles + StateDirectory below.
+#
+# See docs/v2/design/daemon.md and docs/v2/design/secrets.md.
+
+[Unit]
+Description=resy-snipe booking daemon
+Documentation=https://github.com/phall/resy-snipe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Type=notify works because the daemon calls sd_notify(READY=1) after
+# its boot banner (see daemon.md §2.9). If you build without the
+# notify support, switch to Type=simple.
+Type=notify
+NotifyAccess=main
+
+User=resy-snipe
+Group=resy-snipe
+
+ExecStart=/usr/local/bin/resy-snipe serve --config /etc/resy-snipe/config.toml
+
+# Restart policy: come back up on any non-zero exit. Boot is fail-fast
+# (see daemon.md §2), so a crash loop will be visible quickly.
+Restart=on-failure
+RestartSec=5s
+
+# Drain budget: daemon.shutdown_drain_seconds default is 15s
+# (daemon.md §7); 30s gives margin before SIGKILL.
+TimeoutStopSec=30s
+
+# State and logs go through systemd-managed directories. Combined with
+# ProtectSystem=strict below, the daemon can only write to these.
+#   StateDirectory => /var/lib/resy-snipe (0750, owned by User/Group)
+#   LogsDirectory  => /var/log/resy-snipe (rarely used; stdout goes to journald)
+StateDirectory=resy-snipe
+StateDirectoryMode=0750
+LogsDirectory=resy-snipe
+LogsDirectoryMode=0750
+
+# Passphrase delivery (uncomment if using mode=passphrase):
+#
+# LoadCredential=passphrase:/etc/resy-snipe/passphrase
+# Environment=RESY_SNIPE_PASSPHRASE_FILE=%d/passphrase
+#
+# With mode=keyfile the daemon reads /etc/resy-snipe/key.hex directly;
+# no LoadCredential is required.
+
+# ---- Hardening -----------------------------------------------------
+# We use a fixed system user (not DynamicUser=) because the daemon
+# needs persistent ownership of /var/lib/resy-snipe across restarts.
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Capabilities: the daemon does not need any. Empty bounding set means
+# even if exec'd binaries try, they cannot acquire capabilities.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Paths the daemon may read/write.
+ReadWritePaths=/var/lib/resy-snipe
+ReadOnlyPaths=/etc/resy-snipe
+
+# Resource caps. UMask 0027 -> group r-x, world none.
+UMask=0027
+LimitNOFILE=4096
+
+# stdout/stderr -> journald, structured JSON (daemon.md §10).
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

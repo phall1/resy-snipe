@@ -1,0 +1,79 @@
+# resy-snipe Caddyfile
+#
+# Install at: /etc/caddy/Caddyfile (or include from your main config).
+#
+# Caddy handles TLS automatically (Let's Encrypt). The daemon listens
+# loopback-only on 127.0.0.1:7765 (default in docs/v2/design/daemon.md
+# §2.8). Change the dial address here AND daemon.bind in
+# /etc/resy-snipe/config.toml if you move it.
+#
+# Reminder: the daemon's http.trusted_proxies CIDR list in
+# config.toml must contain Caddy's source IP. For Caddy-on-same-host
+# the loopback default is sufficient; for a remote Caddy, add its
+# network.
+
+resy-snipe.example.com {
+
+	# Useful defaults: route real client IPs through correctly. Caddy
+	# v2 sends X-Forwarded-For and X-Forwarded-Proto on reverse_proxy
+	# by default; we also explicitly set X-Forwarded-Host.
+
+	# Health endpoints — restrict to management network.
+	@health {
+		path /healthz /readyz
+	}
+	handle @health {
+		@allowed remote_ip 10.0.0.0/8 127.0.0.0/8 ::1/128
+		handle @allowed {
+			reverse_proxy 127.0.0.1:7765
+		}
+		respond 403
+	}
+
+	# Block pprof and (optionally) metrics from the public surface.
+	# The daemon already enforces loopback-only on /debug/pprof.
+	handle /debug/* {
+		respond 404
+	}
+
+	@metrics path /metrics
+	handle @metrics {
+		@mgmt remote_ip 10.0.0.0/8
+		handle @mgmt {
+			reverse_proxy 127.0.0.1:7765
+		}
+		respond 403
+	}
+
+	# Catch-all: Service API + SSE.
+	#
+	# Caddy's reverse_proxy flushes on each write by default, which is
+	# what SSE needs. We additionally:
+	#   - disable buffering on the upstream
+	#   - set flush_interval -1 to flush after every Write
+	#   - use a long read timeout so /v1/quests/{id}/events can stay
+	#     open for the lifetime of a quest
+	reverse_proxy 127.0.0.1:7765 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+
+		flush_interval -1
+		transport http {
+			read_buffer  4096
+			write_buffer 4096
+			dial_timeout    5s
+			response_header_timeout 30s
+			read_timeout   1h
+		}
+	}
+
+	encode gzip
+
+	log {
+		output file /var/log/caddy/resy-snipe.access.log
+		format json
+	}
+}
