@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"slices"
 	"time"
 
 	"resy-snipe/internal/service"
@@ -25,6 +26,15 @@ type Server struct {
 	log     *slog.Logger
 	mux     *http.ServeMux
 	srv     *http.Server
+
+	// outerWraps is the chain of middlewares the daemon stacks
+	// outside the version middleware. Registered via Wrap; applied
+	// in Handler() in registration order (first-registered runs
+	// outermost). Used for trusted-proxy parsing, request logging,
+	// or any concern that must observe the version header on the
+	// way out. Empty by default — production wiring composes the
+	// chain explicitly.
+	outerWraps []func(http.Handler) http.Handler
 }
 
 // NewServer constructs a Server bound to addr. addr is a host:port
@@ -69,7 +79,23 @@ func (s *Server) HandleFunc(pattern string, h http.HandlerFunc) {
 // behind an httptest.Server in integration tests without running
 // the real listener.
 func (s *Server) Handler() http.Handler {
-	return s.versionMiddleware(s.mux)
+	h := s.versionMiddleware(s.mux)
+	// Apply outer wraps in reverse registration order so the first-
+	// registered middleware ends up outermost (closest to the
+	// listener).
+	for _, mw := range slices.Backward(s.outerWraps) {
+		h = mw(h)
+	}
+	return h
+}
+
+// Wrap registers an outer middleware applied to every request after
+// the version header is set. Mounting order matters: the first-
+// registered Wrap runs outermost. Use this for proxy/X-Forwarded
+// parsing, request logging, or any concern that operates on the full
+// request envelope. Calling Wrap after Run is racy and not supported.
+func (s *Server) Wrap(mw func(http.Handler) http.Handler) {
+	s.outerWraps = append(s.outerWraps, mw)
 }
 
 // Run starts the listener and blocks until ctx is canceled or the

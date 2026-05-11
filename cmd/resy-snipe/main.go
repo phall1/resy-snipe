@@ -66,6 +66,12 @@ func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) erro
 	if len(args) > 0 && args[0] == "user" {
 		return runUserCmd(context.Background(), args[1:], stdin, logOut, clk)
 	}
+	if len(args) > 0 && args[0] == "serve" {
+		return runServeCmd(context.Background(), args[1:], stdin, logOut, clk)
+	}
+	if len(args) > 0 && args[0] == "migrate-secrets" {
+		return runMigrateSecretsCmd(context.Background(), args[1:], stdin, logOut, clk)
+	}
 	if len(args) > 0 && args[0] == "login" {
 		// Parent ctx has no deadline because runLogin's prompt loop is
 		// interactive (the user types their email + password — could
