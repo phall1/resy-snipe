@@ -814,6 +814,9 @@ The daemon does not, and will not:
 
 ## See also
 
+- [docs/v2/operations.md](../operations.md) — operator runbook
+  (install, first boot, day-2 ops, backup, upgrade,
+  troubleshooting).
 - [ADR-0003: Daemon-first, CLI as client](../adr/0003-daemon-first-cli-as-client.md)
 - [ADR-0006: SQLite-only, no external deps](../adr/0006-sqlite-only-no-external-deps.md)
 - [ADR-0008: Secrets sealed at rest](../adr/0008-secrets-sealed-at-rest-operator-key.md)

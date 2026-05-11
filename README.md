@@ -230,7 +230,11 @@ test coverage. The CLI snipe path is wired end-to-end — `resy-snipe -user
 
 Anti-bot signing is wired as a pluggable seam (see "Anti-bot
 signing" above and [docs/anti-bot.md](docs/anti-bot.md)). A Phase 2
-daemon mode is tracked in [docs/work-items.md](docs/work-items.md).
+daemon mode is tracked in [docs/work-items.md](docs/work-items.md);
+the v2 re-architecture is documented at
+[docs/v2/README.md](docs/v2/README.md), and the in-progress
+operator runbook lives at
+[docs/v2/operations.md](docs/v2/operations.md).
 
 For project-state details and what's next, see [docs/state.md](docs/state.md).
 

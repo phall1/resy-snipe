@@ -53,6 +53,11 @@ either wrong or supersedes them — pick one and update the other.
 | Secrets | [secrets.md](design/secrets.md) | Sealed-at-rest store, KDF, rotation |
 | Observability | [observability.md](design/observability.md) | Logs, metrics, healthz, doctor |
 
+### Operator-facing
+
+- [operations.md](operations.md) — install, configure, run, back
+  up, upgrade, troubleshoot.
+
 ### Milestones
 
 | ID | Milestone | Beads |

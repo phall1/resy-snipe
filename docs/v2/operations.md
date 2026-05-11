@@ -216,7 +216,7 @@ common deployment bug — [§8.4](#84-x-forwarded-for-is-ignored),
 ### 4.1 Generate the keyfile
 
 Recommended deployment is keyfile mode (no terminal prompt, no
-env var, no risk of `tee`'d shell history). 32 random bytes,
+env var, no `tee`'d shell history risk). 32 random bytes,
 hex-encoded:
 
 ```bash
@@ -242,8 +242,8 @@ now, exercise via `go test ./internal/daemon/...`.)
 
 ### 4.3 The boot banner
 
-On every successful boot the daemon prints to stderr (and the
-structured log):
+Printed to stderr (and the structured log) on every successful
+boot:
 
 ```
 resy-snipe 2.0.0 (commit abc1234, schema v4)
@@ -256,8 +256,8 @@ ready.
 ```
 
 If `secrets:` reads `dev-mode (insecure)` the daemon is running
-without sealing — only acceptable in dev. See
-[design/secrets.md §Dev-mode](design/secrets.md#dev-mode).
+without sealing — only acceptable in dev
+([design/secrets.md §Dev-mode](design/secrets.md#dev-mode)).
 
 ### 4.4 Seed the operator user
 
@@ -383,16 +383,14 @@ in `datetime(created_at/1000,'unixepoch')`.
 ```sql
 -- Failed auth in the last 24h.
 SELECT datetime(created_at/1000,'unixepoch') AS at,
-       user_id, action, error_code, ip
-  FROM audit_events
+       user_id, action, error_code, ip FROM audit_events
  WHERE ok=0 AND action LIKE 'auth.%'
    AND created_at >= (CAST(strftime('%s','now','-1 day') AS INTEGER)*1000)
  ORDER BY created_at DESC;
 
 -- Recent quest activity for one user.
 SELECT datetime(created_at/1000,'unixepoch') AS at,
-       action, target_id, ok, error_code
-  FROM audit_events
+       action, target_id, ok, error_code FROM audit_events
  WHERE user_id='usr_abc12345' AND action LIKE 'quest.%'
  ORDER BY created_at DESC LIMIT 50;
 
@@ -578,9 +576,9 @@ Configure a real `secrets.mode`, generate a keyfile
 
 ## 9. Filing bugs
 
-Internal task tracking is in **beads** (`bd ready`, `bd show <id>`).
+Internal task tracking: **beads** (`bd ready`, `bd show <id>`).
 External bugs and feature requests:
-<https://github.com/phall/resy-snipe/issues>. Include the boot
+<https://github.com/phall/resy-snipe/issues> — include the boot
 banner, the `/readyz` response (redact tokens), reproduction
 steps, and the smallest log excerpt that shows the failure. Resy
 API protocol bugs go to Resy.
