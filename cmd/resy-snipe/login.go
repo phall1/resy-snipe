@@ -8,7 +8,10 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
+
+	"golang.org/x/term"
 
 	"resy-snipe/internal/clock"
 	"resy-snipe/internal/domain"
@@ -128,7 +131,7 @@ func runLogin(ctx context.Context, stdin io.Reader, out io.Writer, client authCl
 		return errors.New("login: email is required")
 	}
 
-	password, err := promptRaw(reader, out, "Password", "")
+	password, err := promptPassword(stdin, reader, out, "Password")
 	if err != nil {
 		return fmt.Errorf("prompt password: %w", err)
 	}
@@ -291,4 +294,31 @@ func buildSigner(logger *slog.Logger, clk clock.Clock) sign.Signer {
 		slog.String("signer", "subprocess"),
 		slog.String("bin", bin))
 	return s
+}
+
+// promptPassword reads a password without echoing it when stdin is a
+// TTY (term.ReadPassword on the raw fd), and falls back to the buffered
+// reader otherwise — the fallback keeps the existing test harness (which
+// uses strings.NewReader) working unchanged.
+//
+// term.ReadPassword swallows the trailing newline, so we print one
+// manually before returning so subsequent prompts start on a fresh line.
+func promptPassword(stdin io.Reader, reader *bufio.Reader, out io.Writer, label string) (string, error) {
+	fprintf(out, "%s: ", label)
+	if f, ok := stdin.(*os.File); ok {
+		fd := int(f.Fd())
+		if term.IsTerminal(fd) {
+			buf, err := term.ReadPassword(fd)
+			fprintln(out, "")
+			if err != nil {
+				return "", err
+			}
+			return strings.TrimSpace(string(buf)), nil
+		}
+	}
+	raw, err := reader.ReadString('\n')
+	if err != nil && (err != io.EOF || raw == "") {
+		return "", err
+	}
+	return strings.TrimSpace(raw), nil
 }
