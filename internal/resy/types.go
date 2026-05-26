@@ -59,9 +59,12 @@ type FindVenue struct {
 	Venue FindVenueIdent `json:"venue"`
 }
 
-// FindVenueIdent identifies the venue the slots belong to.
+// FindVenueIdent identifies the venue the slots belong to. The "id"
+// field on the wire has shifted shape across Resy API revisions
+// (legacy bare int, now {"resy": <int>}); since we already key off
+// the venue ref the caller passed in (and never read this id), we
+// don't represent it on the struct and let the JSON decoder drop it.
 type FindVenueIdent struct {
-	ID   int64  `json:"id"`
 	Name string `json:"name"`
 }
 
