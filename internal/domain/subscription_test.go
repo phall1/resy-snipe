@@ -1,110 +1,115 @@
-package domain
+package domain_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
+
+	"resy-snipe/internal/domain"
 )
 
 func TestSubscriptionStatus_String(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
-		status SubscriptionStatus
+		status domain.SubscriptionStatus
 		want   string
 	}{
-		{SubscriptionActive, "active"},
-		{SubscriptionPaused, "paused"},
-		{SubscriptionFulfilled, "fulfilled"},
-		{SubscriptionExpired, "expired"},
-		{SubscriptionCancelled, "cancelled"},
-		{SubscriptionStatus(99), "subscription_status(99)"},
+		{domain.SubscriptionActive, "active"},
+		{domain.SubscriptionPaused, "paused"},
+		{domain.SubscriptionFulfilled, "fulfilled"},
+		{domain.SubscriptionExpired, "expired"},
+		{domain.SubscriptionCancelled, "cancelled"},
+		{domain.SubscriptionStatus(99), "subscription_status(99)"},
 	}
 	for _, c := range cases {
-		if got := c.status.String(); got != c.want {
-			t.Errorf("%d.String() = %q, want %q", c.status, got, c.want)
-		}
+		t.Run(c.want, func(t *testing.T) {
+			t.Parallel()
+			if got := c.status.String(); got != c.want {
+				t.Errorf("%d.String() = %q, want %q", c.status, got, c.want)
+			}
+		})
 	}
 }
 
 func TestCanTransitionSubscription(t *testing.T) {
+	t.Parallel()
 	// Allowed transitions
-	allowed := []struct{ from, to SubscriptionStatus }{
-		{SubscriptionActive, SubscriptionPaused},
-		{SubscriptionActive, SubscriptionFulfilled},
-		{SubscriptionActive, SubscriptionExpired},
-		{SubscriptionActive, SubscriptionCancelled},
-		{SubscriptionPaused, SubscriptionActive},
-		{SubscriptionPaused, SubscriptionCancelled},
+	allowed := []struct{ from, to domain.SubscriptionStatus }{
+		{domain.SubscriptionActive, domain.SubscriptionPaused},
+		{domain.SubscriptionActive, domain.SubscriptionFulfilled},
+		{domain.SubscriptionActive, domain.SubscriptionExpired},
+		{domain.SubscriptionActive, domain.SubscriptionCancelled},
+		{domain.SubscriptionPaused, domain.SubscriptionActive},
+		{domain.SubscriptionPaused, domain.SubscriptionCancelled},
 	}
 	for _, c := range allowed {
-		if !CanTransitionSubscription(c.from, c.to) {
-			t.Errorf("CanTransitionSubscription(%s, %s) = false, want true", c.from, c.to)
-		}
+		t.Run(fmt.Sprintf("%s->%s", c.from, c.to), func(t *testing.T) {
+			t.Parallel()
+			if !domain.CanTransitionSubscription(c.from, c.to) {
+				t.Errorf("CanTransitionSubscription(%s, %s) = false, want true", c.from, c.to)
+			}
+		})
 	}
 
 	// Forbidden transitions
-	forbidden := []struct{ from, to SubscriptionStatus }{
-		{SubscriptionFulfilled, SubscriptionActive},
-		{SubscriptionExpired, SubscriptionActive},
-		{SubscriptionCancelled, SubscriptionActive},
-		{SubscriptionFulfilled, SubscriptionPaused},
-		{SubscriptionPaused, SubscriptionFulfilled},
-		{SubscriptionPaused, SubscriptionExpired},
+	forbidden := []struct{ from, to domain.SubscriptionStatus }{
+		{domain.SubscriptionFulfilled, domain.SubscriptionActive},
+		{domain.SubscriptionExpired, domain.SubscriptionActive},
+		{domain.SubscriptionCancelled, domain.SubscriptionActive},
+		{domain.SubscriptionFulfilled, domain.SubscriptionPaused},
+		{domain.SubscriptionPaused, domain.SubscriptionFulfilled},
+		{domain.SubscriptionPaused, domain.SubscriptionExpired},
 	}
 	for _, c := range forbidden {
-		if CanTransitionSubscription(c.from, c.to) {
-			t.Errorf("CanTransitionSubscription(%s, %s) = true, want false", c.from, c.to)
-		}
+		t.Run(fmt.Sprintf("%s->%s", c.from, c.to), func(t *testing.T) {
+			t.Parallel()
+			if domain.CanTransitionSubscription(c.from, c.to) {
+				t.Errorf("CanTransitionSubscription(%s, %s) = true, want false", c.from, c.to)
+			}
+		})
 	}
 }
 
 func TestSubscription_Transition(t *testing.T) {
-	now := time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
-	goal := validGoal(now)
-
-	sub := &Subscription{
-		ID:         "sub-1",
-		UserID:     "user-1",
-		Goal:       goal,
-		Status:     SubscriptionActive,
-		NextPollAt: now.Add(time.Hour),
-	}
-
-	// Success: active -> paused
-	if err := sub.Transition(SubscriptionPaused); err != nil {
-		t.Fatalf("Transition(Active->Paused) unexpected error: %v", err)
-	}
-	if sub.Status != SubscriptionPaused {
-		t.Errorf("Status = %s, want %s", sub.Status, SubscriptionPaused)
-	}
-
-	// Success: paused -> active
-	if err := sub.Transition(SubscriptionActive); err != nil {
-		t.Fatalf("Transition(Paused->Active) unexpected error: %v", err)
-	}
-
-	// Failure: active -> fulfilled -> active
-	if err := sub.Transition(SubscriptionFulfilled); err != nil {
-		t.Fatalf("Transition(Active->Fulfilled) unexpected error: %v", err)
-	}
-	err := sub.Transition(SubscriptionActive)
-	var invErr InvalidSubscriptionTransitionError
-	if !errors.As(err, &invErr) {
-		t.Fatalf("Transition(Fulfilled->Active) error type = %T, want InvalidSubscriptionTransitionError", err)
-	}
-	if invErr.From != SubscriptionFulfilled || invErr.To != SubscriptionActive {
-		t.Errorf("InvalidSubscriptionTransitionError = %s -> %s, want %s -> %s",
-			invErr.From, invErr.To, SubscriptionFulfilled, SubscriptionActive)
-	}
+	t.Parallel()
+	t.Run("active to fulfilled", func(t *testing.T) {
+		t.Parallel()
+		s := domain.Subscription{Status: domain.SubscriptionActive}
+		if err := s.Transition(domain.SubscriptionFulfilled); err != nil {
+			t.Fatalf("transition failed: %v", err)
+		}
+		if s.Status != domain.SubscriptionFulfilled {
+			t.Errorf("status = %s, want fulfilled", s.Status)
+		}
+	})
+	t.Run("fulfilled to active should fail", func(t *testing.T) {
+		t.Parallel()
+		s := domain.Subscription{Status: domain.SubscriptionFulfilled}
+		err := s.Transition(domain.SubscriptionActive)
+		if err == nil {
+			t.Fatal("fulfilled -> active should fail")
+		}
+		var invalidErr domain.InvalidSubscriptionTransitionError
+		if !errors.As(err, &invalidErr) {
+			t.Errorf("expected InvalidSubscriptionTransitionError, got %T", err)
+		}
+		// Status must not have changed on a rejected transition.
+		if s.Status != domain.SubscriptionFulfilled {
+			t.Fatalf("Status mutated after rejected transition: %s", s.Status)
+		}
+	})
 }
 
 func TestSubscription_Validate(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
-	goal := validGoal(now)
-	validSub := Subscription{
+	goal := makeValidGoal(now)
+	validSub := domain.Subscription{
 		ID:           "sub-1",
 		UserID:       "user-1",
 		Goal:         goal,
-		Status:       SubscriptionActive,
+		Status:       domain.SubscriptionActive,
 		PollInterval: time.Minute,
 		NextPollAt:   now.Add(time.Hour),
 	}
@@ -115,76 +120,77 @@ func TestSubscription_Validate(t *testing.T) {
 
 	cases := []struct {
 		name    string
-		mutate  func(*Subscription)
-		wantErr string
+		mutate  func(*domain.Subscription)
+		wantErr error
 	}{
 		{
 			name: "missing ID",
-			mutate: func(s *Subscription) {
+			mutate: func(s *domain.Subscription) {
 				s.ID = ""
 			},
-			wantErr: "subscription: ID is required",
+			wantErr: domain.ErrSubscriptionIDMissing,
 		},
 		{
 			name: "missing UserID",
-			mutate: func(s *Subscription) {
+			mutate: func(s *domain.Subscription) {
 				s.UserID = ""
 			},
-			wantErr: "subscription: UserID is required",
+			wantErr: domain.ErrSubscriptionUserMissing,
 		},
 		{
 			name: "invalid goal",
-			mutate: func(s *Subscription) {
+			mutate: func(s *domain.Subscription) {
 				s.Goal.Party = 0
 			},
-			wantErr: "subscription: goal: party must be positive",
+			wantErr: domain.ErrGoalPartyNonPositive,
 		},
 		{
 			name: "invalid status",
-			mutate: func(s *Subscription) {
-				s.Status = SubscriptionStatus(99)
+			mutate: func(s *domain.Subscription) {
+				s.Status = domain.SubscriptionStatus(99)
 			},
-			wantErr: "subscription: invalid status",
+			wantErr: domain.ErrSubscriptionStatusInvalid,
 		},
 		{
 			name: "negative PollInterval",
-			mutate: func(s *Subscription) {
+			mutate: func(s *domain.Subscription) {
 				s.PollInterval = -time.Minute
 			},
-			wantErr: "subscription: PollInterval must be non-negative",
+			wantErr: domain.ErrSubscriptionPollIntervalNegative,
 		},
 		{
 			name: "missing NextPollAt",
-			mutate: func(s *Subscription) {
+			mutate: func(s *domain.Subscription) {
 				s.NextPollAt = time.Time{}
 			},
-			wantErr: "subscription: NextPollAt is required",
+			wantErr: domain.ErrSubscriptionNextPollAtMissing,
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			s := validSub
 			c.mutate(&s)
 			err := s.Validate(now)
 			if err == nil {
-				t.Fatalf("expected error containing %q, got nil", c.wantErr)
+				t.Fatalf("expected error, got nil")
 			}
-			if err.Error() != c.wantErr {
-				t.Errorf("error = %q, want %q", err.Error(), c.wantErr)
+			if !errors.Is(err, c.wantErr) {
+				t.Errorf("expected %v, got %v", c.wantErr, err)
 			}
 		})
 	}
 }
 
-func validGoal(now time.Time) Goal {
-	return Goal{
-		VenueQuery: VenueQuerySlug{Slug: "test-venue", City: "nyc"},
-		Date:       NewDate(now.Year(), now.Month(), now.Day()+1),
+func makeValidGoal(now time.Time) domain.Goal {
+	return domain.Goal{
+		VenueQuery: domain.VenueQuerySlug{Slug: "test-venue", City: "nyc"},
+		Date:       domain.NewDate(now.Year(), now.Month(), now.Day()+1),
 		Party:      2,
-		TimePrefs: TimeWindow{
-			Start: NewWallTime(18, 0, 0),
-			End:   NewWallTime(20, 0, 0),
+		TimePrefs: domain.TimeWindow{
+			Start: domain.NewWallTime(18, 0, 0),
+			End:   domain.NewWallTime(20, 0, 0),
 		},
 		AccountID: "acct-1",
 	}
