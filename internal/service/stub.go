@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"resy-snipe/internal/domain"
 )
@@ -38,6 +39,26 @@ func (Stub) GetQuest(_ context.Context, _ domain.UserID, _ domain.QuestID) (Ques
 // ListQuests implements Service.
 func (Stub) ListQuests(_ context.Context, _ domain.UserID, _ ListFilter) ([]QuestSummary, error) {
 	return nil, ErrNotImplemented
+}
+
+// CreateSubscription implements Service.
+func (Stub) CreateSubscription(_ context.Context, _ domain.UserID, _ domain.Goal, _ *domain.CompromisePolicy, _ *time.Time) (domain.SubscriptionID, error) {
+	return "", ErrNotImplemented
+}
+
+// GetSubscription implements Service.
+func (Stub) GetSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) (Subscription, error) {
+	return Subscription{}, ErrNotImplemented
+}
+
+// ListSubscriptions implements Service.
+func (Stub) ListSubscriptions(_ context.Context, _ domain.UserID, _ SubscriptionFilter) ([]Subscription, error) {
+	return nil, ErrNotImplemented
+}
+
+// CancelSubscription implements Service.
+func (Stub) CancelSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return ErrNotImplemented
 }
 
 // CancelQuest implements Service.
