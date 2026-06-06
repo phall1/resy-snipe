@@ -324,6 +324,70 @@ func (a *serviceStoreAdapter) RevokeToken(
 	return err
 }
 
+// CreateSubscription delegates to store.CreateSubscription.
+func (a *serviceStoreAdapter) CreateSubscription(ctx context.Context, row service.SubscriptionRow) error {
+	return store.CreateSubscription(ctx, a.store.DB(), store.SubscriptionRow{
+		ID:             row.ID,
+		UserID:         row.UserID,
+		GoalJSON:       row.GoalJSON,
+		Status:         row.Status,
+		CreatedAt:      row.CreatedAt,
+		UpdatedAt:      row.UpdatedAt,
+		ExpiresAt:      row.ExpiresAt,
+		FulfilledBy:    row.FulfilledBy,
+		CompromiseJSON: row.CompromiseJSON,
+		PollInterval:   row.PollInterval,
+		NextPollAt:     row.NextPollAt,
+	})
+}
+
+// GetSubscription delegates to store.GetSubscription and folds
+// store.ErrNotFound into service.ErrNotFound.
+func (a *serviceStoreAdapter) GetSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) (service.SubscriptionRow, error) {
+	r, err := store.GetSubscription(ctx, a.store.DB(), userID, subID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return service.SubscriptionRow{}, service.ErrNotFound
+		}
+		return service.SubscriptionRow{}, err
+	}
+	return toServiceSubscriptionRow(r), nil
+}
+
+// ListSubscriptions delegates to store.ListSubscriptions.
+func (a *serviceStoreAdapter) ListSubscriptions(ctx context.Context, userID domain.UserID, filter service.SubscriptionFilter) ([]service.SubscriptionRow, error) {
+	rows, err := store.ListSubscriptions(ctx, a.store.DB(), userID, store.SubscriptionListFilter{
+		Status: filter.Status,
+		Limit:  filter.Limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]service.SubscriptionRow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toServiceSubscriptionRow(r))
+	}
+	return out, nil
+}
+
+// UpdateSubscriptionStatus delegates to store.UpdateSubscriptionStatus and
+// folds store.ErrNotFound into service.ErrNotFound.
+func (a *serviceStoreAdapter) UpdateSubscriptionStatus(
+	ctx context.Context,
+	userID domain.UserID,
+	subID domain.SubscriptionID,
+	newStatus domain.SubscriptionStatus,
+	fulfilledBy *domain.QuestID,
+	nextPollAt *time.Time,
+	updatedAt time.Time,
+) error {
+	err := store.UpdateSubscriptionStatus(ctx, a.store.DB(), userID, subID, newStatus, fulfilledBy, nextPollAt, updatedAt)
+	if err != nil && errors.Is(err, store.ErrNotFound) {
+		return service.ErrNotFound
+	}
+	return err
+}
+
 func toServiceQuestRow(r store.QuestRow) service.QuestRow {
 	return service.QuestRow{
 		ID:          r.ID,
@@ -346,5 +410,21 @@ func toServiceAccountRow(r store.AccountRow) service.AccountRow {
 		DisplayName: r.DisplayName,
 		CreatedAt:   r.CreatedAt,
 		DisabledAt:  r.DisabledAt,
+	}
+}
+
+func toServiceSubscriptionRow(r store.SubscriptionRow) service.SubscriptionRow {
+	return service.SubscriptionRow{
+		ID:             r.ID,
+		UserID:         r.UserID,
+		GoalJSON:       r.GoalJSON,
+		Status:         r.Status,
+		CreatedAt:      r.CreatedAt,
+		UpdatedAt:      r.UpdatedAt,
+		ExpiresAt:      r.ExpiresAt,
+		FulfilledBy:    r.FulfilledBy,
+		CompromiseJSON: r.CompromiseJSON,
+		PollInterval:   r.PollInterval,
+		NextPollAt:     r.NextPollAt,
 	}
 }

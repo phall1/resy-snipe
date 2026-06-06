@@ -248,6 +248,30 @@ func (a *testStoreBackend) RevokeToken(
 	return err
 }
 
+func (a *testStoreBackend) CreateSubscription(_ context.Context, _ service.SubscriptionRow) error {
+	return service.ErrNotImplemented
+}
+
+func (a *testStoreBackend) GetSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) (service.SubscriptionRow, error) {
+	return service.SubscriptionRow{}, service.ErrNotImplemented
+}
+
+func (a *testStoreBackend) ListSubscriptions(_ context.Context, _ domain.UserID, _ service.SubscriptionFilter) ([]service.SubscriptionRow, error) {
+	return nil, service.ErrNotImplemented
+}
+
+func (a *testStoreBackend) UpdateSubscriptionStatus(
+	_ context.Context,
+	_ domain.UserID,
+	_ domain.SubscriptionID,
+	_ domain.SubscriptionStatus,
+	_ *domain.QuestID,
+	_ *time.Time,
+	_ time.Time,
+) error {
+	return service.ErrNotImplemented
+}
+
 // ---- fake resolver / provider / auth -------------------------------------
 
 type fakeResolver struct {

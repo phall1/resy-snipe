@@ -29,6 +29,7 @@ import (
 
 	"resy-snipe/internal/clock"
 	"resy-snipe/internal/daemon"
+	"resy-snipe/internal/domain"
 	"resy-snipe/internal/engine"
 	"resy-snipe/internal/resolver"
 	"resy-snipe/internal/resy"
@@ -185,6 +186,11 @@ func composeServer(
 		return nil, nil, nil, fmt.Errorf("service.New: %w", err)
 	}
 
+	// Scheduler: poll active subscriptions for configured users.
+	schedulerUsers := []domain.UserID{} // AA-M1: empty list means scheduler is idle; operator seeds users via config later
+	scheduler := daemon.NewDaemonScheduler(svc, clk, logger, schedulerUsers)
+	scheduler.Start()
+
 	// HTTP transport.
 	srv := transport.NewServer(cfg.Daemon.Bind, serveBuildVersion, logger)
 
@@ -225,6 +231,7 @@ func composeServer(
 
 	_ = ctx
 	cleanup := func() {
+		scheduler.Stop()
 		// rclient holds the http.Client; close on shutdown so
 		// connection pool resources release promptly.
 	}

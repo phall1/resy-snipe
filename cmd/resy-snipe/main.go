@@ -46,6 +46,9 @@ func run(args []string, stdin io.Reader, logOut io.Writer, clk clock.Clock) erro
 	// not a flag) selects the subcommand; everything else falls through
 	// to the existing snipe flow. Recognized subcommands: `login`,
 	// `user`, `venue resolve`. Future subcommands plug in here.
+	if len(args) > 0 && args[0] == "subscription" {
+		return runSubscriptionCmd(context.Background(), args[1:], stdin, logOut, clk)
+	}
 	if len(args) > 1 && args[0] == "venue" && args[1] == "resolve" {
 		return runResolveCmd(context.Background(), args[2:], stdin, logOut, clk)
 	}

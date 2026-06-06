@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"resy-snipe/internal/domain"
 )
@@ -34,6 +35,33 @@ type Service interface {
 	// ListQuests returns lightweight summaries for the caller's
 	// quests, narrowed by filter.
 	ListQuests(ctx context.Context, userID domain.UserID, filter ListFilter) ([]QuestSummary, error)
+
+	// CreateSubscription persists a subscription hunt.
+	CreateSubscription(ctx context.Context, userID domain.UserID, goal domain.Goal, compromise *domain.CompromisePolicy, expiresAt *time.Time) (domain.SubscriptionID, error)
+
+	// GetSubscription returns a subscription the caller owns.
+	GetSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) (Subscription, error)
+
+	// ListSubscriptions returns the caller's subscriptions, narrowed by filter.
+	ListSubscriptions(ctx context.Context, userID domain.UserID, filter SubscriptionFilter) ([]Subscription, error)
+
+	// CancelSubscription transitions a subscription to Cancelled.
+	CancelSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error
+
+	// UpdateSubscriptionNextPoll updates the next_poll_at of an active subscription.
+	UpdateSubscriptionNextPoll(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID, nextPollAt time.Time) error
+
+	// PauseSubscription transitions a subscription to Paused (used on auth expiry).
+	PauseSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error
+
+	// FulfillSubscription transitions a subscription to Fulfilled and records the quest ID.
+	FulfillSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID, questID domain.QuestID) error
+
+	// ExpireSubscription transitions a subscription to Expired.
+	ExpireSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error
+
+	// ResumeSubscription transitions a subscription from Paused to Active.
+	ResumeSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error
 
 	// CancelQuest signals the engine to abort a running quest.
 	// Canceling an already-terminal quest is not an error.

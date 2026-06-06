@@ -231,6 +231,27 @@ type StoreBackend interface {
 	// sentinel — re-revoking a dead credential is operationally a
 	// no-op).
 	RevokeToken(ctx context.Context, userID domain.UserID, tokenID string, now time.Time) error
+
+	// CreateSubscription persists a subscription row.
+	CreateSubscription(ctx context.Context, row SubscriptionRow) error
+
+	// GetSubscription returns the (userID, subID) row, or ErrNotFound.
+	GetSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) (SubscriptionRow, error)
+
+	// ListSubscriptions returns userID's subscription rows narrowed by filter.
+	ListSubscriptions(ctx context.Context, userID domain.UserID, filter SubscriptionFilter) ([]SubscriptionRow, error)
+
+	// UpdateSubscriptionStatus flips a subscription's status and optionally
+	// fulfilled_by / next_poll_at / updated_at in place.
+	UpdateSubscriptionStatus(
+		ctx context.Context,
+		userID domain.UserID,
+		subID domain.SubscriptionID,
+		newStatus domain.SubscriptionStatus,
+		fulfilledBy *domain.QuestID,
+		nextPollAt *time.Time,
+		updatedAt time.Time,
+	) error
 }
 
 // AuditWrite is the consumer-side projection of one audit_events row,

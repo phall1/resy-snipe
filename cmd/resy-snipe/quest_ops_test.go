@@ -92,6 +92,33 @@ func (f *fakeQuestService) ListTokens(_ context.Context, _ domain.UserID) ([]ser
 func (f *fakeQuestService) ListUsers(_ context.Context, _ domain.UserID) ([]service.User, error) {
 	return nil, service.ErrNotImplemented
 }
+func (f *fakeQuestService) CreateSubscription(_ context.Context, _ domain.UserID, _ domain.Goal, _ *domain.CompromisePolicy, _ *time.Time) (domain.SubscriptionID, error) {
+	return "", service.ErrNotImplemented
+}
+func (f *fakeQuestService) GetSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) (service.Subscription, error) {
+	return service.Subscription{}, service.ErrNotImplemented
+}
+func (f *fakeQuestService) ListSubscriptions(_ context.Context, _ domain.UserID, _ service.SubscriptionFilter) ([]service.Subscription, error) {
+	return nil, service.ErrNotImplemented
+}
+func (f *fakeQuestService) CancelSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return service.ErrNotImplemented
+}
+func (f *fakeQuestService) UpdateSubscriptionNextPoll(_ context.Context, _ domain.UserID, _ domain.SubscriptionID, _ time.Time) error {
+	return service.ErrNotImplemented
+}
+func (f *fakeQuestService) PauseSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return service.ErrNotImplemented
+}
+func (f *fakeQuestService) FulfillSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID, _ domain.QuestID) error {
+	return service.ErrNotImplemented
+}
+func (f *fakeQuestService) ExpireSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return service.ErrNotImplemented
+}
+func (f *fakeQuestService) ResumeSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return service.ErrNotImplemented
+}
 
 // testDefaultUser is the UserID swapQuestService installs into the
 // resolveDefaultUserFn seam. Hardcoded (rather than a swapQuestService

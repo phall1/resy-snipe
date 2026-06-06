@@ -50,6 +50,7 @@ func TestMigrateCreatesAllTables(t *testing.T) {
 		"audit_events",
 		"venues_cache",
 		"name_search_cache",
+		"subscriptions",
 	}
 	got := listTables(t, db)
 	for _, name := range want {
@@ -95,6 +96,7 @@ func TestMigrateRecordsAppliedVersions(t *testing.T) {
 		{version: 2, name: "v2_multi_user"},
 		{version: 3, name: "idempotency"},
 		{version: 4, name: "tokens_reshape"},
+		{version: 5, name: "subscriptions"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("schema_migrations rows: %+v, want %+v", got, want)
@@ -120,8 +122,8 @@ func TestMigrateIsIdempotent(t *testing.T) {
 		`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 4 {
-		t.Fatalf("schema_migrations row count = %d, want 4 after triple-Migrate", n)
+	if n != 5 {
+		t.Fatalf("schema_migrations row count = %d, want 5 after triple-Migrate", n)
 	}
 }
 
@@ -361,6 +363,8 @@ func TestMigrateV2ForeignKeys(t *testing.T) {
 		{"quest_events", "quest_id", "quests", "id", "CASCADE"},
 		{"audit_events", "user_id", "users", "id", "CASCADE"},
 		{"audit_events", "target_user_id", "users", "id", "SET NULL"},
+		{"subscriptions", "user_id", "users", "id", "CASCADE"},
+		{"subscriptions", "fulfilled_by", "quests", "id", "SET NULL"},
 	}
 	for _, c := range cases {
 		if !hasForeignKey(t, ctx, db, c.table, c.col, c.refTable, c.refCol, c.onDelete) {

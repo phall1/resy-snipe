@@ -21,3 +21,6 @@ type AccountID string
 // Goal, the Plans we've derived from it, and the engine Runs we've
 // scheduled. Distinct from SnipeID, which names a single engine Run.
 type QuestID string
+
+// SubscriptionID identifies a persistent subscription hunt.
+type SubscriptionID string

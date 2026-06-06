@@ -72,6 +72,10 @@ var (
 	// ErrIdempotencyConflict is returned when a stored idempotency
 	// response is incompatible with the current request payload.
 	ErrIdempotencyConflict = errors.New("service: idempotency conflict")
+
+	// ErrAuthExpired is returned when a provider session has expired
+	// and needs re-authentication.
+	ErrAuthExpired = errors.New("service: auth expired")
 )
 
 // IsNotFound reports whether err is or wraps ErrNotFound.
