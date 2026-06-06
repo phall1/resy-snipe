@@ -14,11 +14,11 @@ import (
 // DaemonScheduler wraps the service.Scheduler with daemon lifecycle
 // management: start, stop, and per-user polling.
 type DaemonScheduler struct {
-	sch     *service.Scheduler
-	svc     service.Service
-	clock   clock.Clock
-	log     *slog.Logger
-	users   []domain.UserID
+	sch   *service.Scheduler
+	svc   service.Service
+	clock clock.Clock
+	log   *slog.Logger
+	users []domain.UserID
 
 	mu      sync.Mutex
 	running bool
@@ -77,7 +77,16 @@ func (ds *DaemonScheduler) loop() {
 }
 
 func (ds *DaemonScheduler) tick() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-ds.stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	defer cancel()
+
 	now := ds.clock.Now()
 
 	for _, userID := range ds.users {

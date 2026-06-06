@@ -381,11 +381,7 @@ func (a *serviceStoreAdapter) UpdateSubscriptionStatus(
 	nextPollAt *time.Time,
 	updatedAt time.Time,
 ) error {
-	var np time.Time
-	if nextPollAt != nil {
-		np = *nextPollAt
-	}
-	err := store.UpdateSubscriptionStatus(ctx, a.store.DB(), userID, subID, newStatus, fulfilledBy, np, updatedAt)
+	err := store.UpdateSubscriptionStatus(ctx, a.store.DB(), userID, subID, newStatus, fulfilledBy, nextPollAt, updatedAt)
 	if err != nil && errors.Is(err, store.ErrNotFound) {
 		return service.ErrNotFound
 	}

@@ -318,7 +318,7 @@ func TestUpdateSubscriptionStatus(t *testing.T) {
 
 	later := now.Add(time.Hour)
 	questID := domain.QuestID("q_fulfill001")
-	if err := store.UpdateSubscriptionStatus(ctx, db, uid, row.ID, domain.SubscriptionFulfilled, &questID, later, later); err != nil {
+	if err := store.UpdateSubscriptionStatus(ctx, db, uid, row.ID, domain.SubscriptionFulfilled, &questID, &later, later); err != nil {
 		t.Fatalf("UpdateSubscriptionStatus: %v", err)
 	}
 
@@ -350,7 +350,7 @@ func TestUpdateSubscriptionStatusWrongUser(t *testing.T) {
 		t.Fatalf("CreateSubscription: %v", err)
 	}
 
-	err := store.UpdateSubscriptionStatus(ctx, db, domain.UserID("usr_other"), row.ID, domain.SubscriptionPaused, nil, now, now)
+	err := store.UpdateSubscriptionStatus(ctx, db, domain.UserID("usr_other"), row.ID, domain.SubscriptionPaused, nil, nil, now)
 	if !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("UpdateSubscriptionStatus wrong user: want ErrNotFound, got %v", err)
 	}

@@ -154,20 +154,24 @@ func UpdateSubscriptionStatus(
 	subID domain.SubscriptionID,
 	newStatus domain.SubscriptionStatus,
 	fulfilledBy *domain.QuestID,
-	nextPollAt time.Time,
+	nextPollAt *time.Time,
 	updatedAt time.Time,
 ) error {
 	if db == nil {
 		return errors.New("UpdateSubscriptionStatus: nil db")
 	}
+	var nextPollMs sql.NullInt64
+	if nextPollAt != nil {
+		nextPollMs = sql.NullInt64{Int64: nextPollAt.UnixMilli(), Valid: true}
+	}
 	res, err := db.ExecContext(ctx, `
 		UPDATE subscriptions
-		SET status = ?, updated_at = ?, fulfilled_by = ?, next_poll_at = ?
+		SET status = ?, fulfilled_by = ?, next_poll_at = COALESCE(?, next_poll_at), updated_at = ?
 		WHERE id = ? AND user_id = ?`,
 		newStatus.String(),
-		updatedAt.UnixMilli(),
 		nullableQuestID(fulfilledBy),
-		nextPollAt.UnixMilli(),
+		nextPollMs,
+		updatedAt.UnixMilli(),
 		string(subID),
 		string(userID),
 	)
