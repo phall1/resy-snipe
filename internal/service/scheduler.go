@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"resy-snipe/internal/clock"
@@ -19,10 +18,6 @@ type Scheduler struct {
 	service    Service
 	clock      clock.Clock
 	log        *slog.Logger
-	mu         sync.Mutex
-	running    bool
-	stopCh     chan struct{}
-	wg         sync.WaitGroup
 	maxBackoff time.Duration
 }
 
@@ -35,54 +30,7 @@ func NewScheduler(svc Service, clk clock.Clock, log *slog.Logger) *Scheduler {
 		service:    svc,
 		clock:      clk,
 		log:        log,
-		stopCh:     make(chan struct{}),
 		maxBackoff: 10 * time.Minute,
-	}
-}
-
-// Start begins the scheduler loop in a background goroutine.
-func (sch *Scheduler) Start() {
-	sch.mu.Lock()
-	defer sch.mu.Unlock()
-	if sch.running {
-		return
-	}
-	sch.stopCh = make(chan struct{})
-	sch.running = true
-	sch.wg.Add(1)
-	go sch.loop()
-}
-
-// Stop signals the scheduler to shut down and waits for the loop to exit.
-func (sch *Scheduler) Stop() {
-	sch.mu.Lock()
-	defer sch.mu.Unlock()
-	if !sch.running {
-		return
-	}
-	sch.running = false
-	close(sch.stopCh)
-	sch.wg.Wait()
-}
-
-func (sch *Scheduler) loop() {
-	defer sch.wg.Done()
-	for {
-		select {
-		case <-sch.stopCh:
-			return
-		default:
-		}
-		sch.tick()
-	}
-}
-
-func (sch *Scheduler) tick() {
-	// tick is a no-op at the service level; the daemon drives per-user polling.
-	// Sleep briefly to avoid busy-looping if tick is called directly.
-	select {
-	case <-sch.clock.After(1 * time.Second):
-	case <-sch.stopCh:
 	}
 }
 

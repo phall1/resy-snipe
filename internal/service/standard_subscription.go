@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -154,10 +153,7 @@ func (s *Standard) UpdateSubscriptionNextPoll(ctx context.Context, userID domain
 	}()
 	now := s.clock.Now()
 	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionActive, nil, &nextPollAt, now); err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return ErrNotFound
-		}
-		return fmt.Errorf("UpdateSubscriptionNextPoll: %w", err)
+		return fmt.Errorf("UpdateSubscriptionNextPoll: %w", mapStoreNotFound(err))
 	}
 	return nil
 }
@@ -172,10 +168,7 @@ func (s *Standard) PauseSubscription(ctx context.Context, userID domain.UserID, 
 	}()
 	now := s.clock.Now()
 	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionPaused, nil, nil, now); err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return ErrNotFound
-		}
-		return fmt.Errorf("PauseSubscription: %w", err)
+		return fmt.Errorf("PauseSubscription: %w", mapStoreNotFound(err))
 	}
 	return nil
 }
@@ -190,10 +183,37 @@ func (s *Standard) FulfillSubscription(ctx context.Context, userID domain.UserID
 	}()
 	now := s.clock.Now()
 	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionFulfilled, &questID, nil, now); err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return ErrNotFound
-		}
-		return fmt.Errorf("FulfillSubscription: %w", err)
+		return fmt.Errorf("FulfillSubscription: %w", mapStoreNotFound(err))
+	}
+	return nil
+}
+
+// ExpireSubscription transitions a subscription to Expired.
+func (s *Standard) ExpireSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) (retErr error) {
+	if userID == "" {
+		return fmt.Errorf("ExpireSubscription: %w: userID is required", ErrInvalidArgument)
+	}
+	defer func() {
+		s.audit(ctx, userID, actionSubscriptionExpired, string(subID), retErr)
+	}()
+	now := s.clock.Now()
+	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionExpired, nil, nil, now); err != nil {
+		return fmt.Errorf("ExpireSubscription: %w", mapStoreNotFound(err))
+	}
+	return nil
+}
+
+// ResumeSubscription transitions a subscription from Paused to Active.
+func (s *Standard) ResumeSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) (retErr error) {
+	if userID == "" {
+		return fmt.Errorf("ResumeSubscription: %w: userID is required", ErrInvalidArgument)
+	}
+	defer func() {
+		s.audit(ctx, userID, actionSubscriptionResume, string(subID), retErr)
+	}()
+	now := s.clock.Now()
+	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionActive, nil, nil, now); err != nil {
+		return fmt.Errorf("ResumeSubscription: %w", mapStoreNotFound(err))
 	}
 	return nil
 }

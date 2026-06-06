@@ -106,6 +106,9 @@ func (ds *DaemonScheduler) tick() {
 			}
 			if sub.ExpiresAt != nil && sub.ExpiresAt.Before(now) {
 				ds.log.Info("subscription expired", slog.String("subscription_id", string(sub.ID)))
+				if err := ds.svc.ExpireSubscription(ctx, userID, sub.ID); err != nil {
+					ds.log.Error("expire subscription failed", slog.String("subscription_id", string(sub.ID)), slog.Any("error", err))
+				}
 				continue
 			}
 			if err := ds.sch.PollSubscription(ctx, userID, sub); err != nil {

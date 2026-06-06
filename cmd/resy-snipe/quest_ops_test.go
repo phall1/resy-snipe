@@ -113,6 +113,12 @@ func (f *fakeQuestService) PauseSubscription(_ context.Context, _ domain.UserID,
 func (f *fakeQuestService) FulfillSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID, _ domain.QuestID) error {
 	return service.ErrNotImplemented
 }
+func (f *fakeQuestService) ExpireSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return service.ErrNotImplemented
+}
+func (f *fakeQuestService) ResumeSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return service.ErrNotImplemented
+}
 
 // testDefaultUser is the UserID swapQuestService installs into the
 // resolveDefaultUserFn seam. Hardcoded (rather than a swapQuestService

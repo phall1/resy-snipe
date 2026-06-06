@@ -76,6 +76,16 @@ func (Stub) FulfillSubscription(_ context.Context, _ domain.UserID, _ domain.Sub
 	return ErrNotImplemented
 }
 
+// ExpireSubscription implements Service.
+func (Stub) ExpireSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return ErrNotImplemented
+}
+
+// ResumeSubscription implements Service.
+func (Stub) ResumeSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return ErrNotImplemented
+}
+
 // CancelQuest implements Service.
 func (Stub) CancelQuest(_ context.Context, _ domain.UserID, _ domain.QuestID, _ CancelOpts) error {
 	return ErrNotImplemented

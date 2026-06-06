@@ -47,8 +47,10 @@ func runSubscriptionCmd(
 		return runSubscriptionGetCmd(ctx, args[1:], stdin, out, clk)
 	case "cancel":
 		return runSubscriptionCancelCmd(ctx, args[1:], stdin, out, clk)
+	case "resume":
+		return runSubscriptionResumeCmd(ctx, args[1:], stdin, out, clk)
 	default:
-		fprintf(out, "Usage: resy-snipe subscription <create|list|get|cancel> [args]\n")
+		fprintf(out, "Usage: resy-snipe subscription <create|list|get|cancel|resume> [args]\n")
 		return fmt.Errorf("subscription: unknown subcommand %q", args[0])
 	}
 }
@@ -318,6 +320,63 @@ func runSubscriptionCancelCmd(
 		return fmt.Errorf("subscription cancel: %w", err)
 	}
 	fprintf(out, "canceled %s\n", subID)
+	return nil
+}
+
+// runSubscriptionResumeCmd implements `resy-snipe subscription resume <subID> [flags]`.
+func runSubscriptionResumeCmd(
+	ctx context.Context,
+	args []string,
+	_ io.Reader,
+	out io.Writer,
+	clk clock.Clock,
+) error {
+	fs := flag.NewFlagSet("subscription resume", flag.ContinueOnError)
+	fs.SetOutput(out)
+	fs.Usage = func() {
+		fprintln(out, "Usage: resy-snipe subscription resume <subID> [-user <id>]")
+		fs.PrintDefaults()
+	}
+	userRaw := fs.String("user", "", "tenant user id (defaults to the sole operator)")
+	flagsFirst, positionals := splitFlagsAndPositionals(args)
+	if err := fs.Parse(flagsFirst); err != nil {
+		return fmt.Errorf("subscription resume: %w", err)
+	}
+	rest := positionals
+	rest = append(rest, fs.Args()...)
+	if len(rest) == 0 {
+		fs.Usage()
+		return errors.New("subscription resume: missing <subID> positional argument")
+	}
+	if len(rest) > 1 {
+		fs.Usage()
+		return fmt.Errorf("subscription resume: unexpected extra arguments: %v", rest[1:])
+	}
+	subID := domain.SubscriptionID(strings.TrimSpace(rest[0]))
+	if subID == "" {
+		return errors.New("subscription resume: subID is required")
+	}
+
+	logger := newCLILogger(out, slog.LevelInfo)
+	svc, cleanup, err := newSubscriptionServiceFn(ctx, logger, clk)
+	if err != nil {
+		return fmt.Errorf("subscription resume bootstrap: %w", err)
+	}
+	defer questCleanup(cleanup)
+
+	userID, err := resolveQuestUser(ctx, *userRaw, clk)
+	if err != nil {
+		return fmt.Errorf("subscription resume: %w", err)
+	}
+
+	if err := svc.ResumeSubscription(ctx, userID, subID); err != nil {
+		if errors.Is(err, service.ErrNotFound) {
+			fprintf(out, "subscription not found: %s\n", subID)
+			return fmt.Errorf("subscription resume: %w", err)
+		}
+		return fmt.Errorf("subscription resume: %w", err)
+	}
+	fprintf(out, "resumed %s\n", subID)
 	return nil
 }
 

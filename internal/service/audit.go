@@ -54,6 +54,8 @@ const (
 	actionSubscriptionUpdate    = "subscription.update"
 	actionSubscriptionPause     = "subscription.pause"
 	actionSubscriptionFulfilled = "subscription.fulfilled"
+	actionSubscriptionExpired   = "subscription.expired"
+	actionSubscriptionResume    = "subscription.resume"
 )
 
 // audit writes one audit_events row for a completed Service call.

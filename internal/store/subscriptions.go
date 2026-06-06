@@ -143,10 +143,9 @@ func ListSubscriptions(ctx context.Context, db *sql.DB, userID domain.UserID, fi
 	return out, nil
 }
 
-// UpdateSubscriptionStatus flips a subscription's status (and optionally
-// fulfilled_by and next_poll_at) in place. The WHERE clause filters on
-// user_id so a wrong-tenant call produces zero rows-affected, which
-// surfaces as ErrNotFound.
+// UpdateSubscriptionStatus updates a subscription's status and optionally
+// fulfilled_by and next_poll_at. A nil pointer for fulfilledBy or nextPollAt
+// preserves the existing column value.
 func UpdateSubscriptionStatus(
 	ctx context.Context,
 	db *sql.DB,
@@ -166,7 +165,7 @@ func UpdateSubscriptionStatus(
 	}
 	res, err := db.ExecContext(ctx, `
 		UPDATE subscriptions
-		SET status = ?, fulfilled_by = ?, next_poll_at = COALESCE(?, next_poll_at), updated_at = ?
+		SET status = ?, fulfilled_by = COALESCE(?, fulfilled_by), next_poll_at = COALESCE(?, next_poll_at), updated_at = ?
 		WHERE id = ? AND user_id = ?`,
 		newStatus.String(),
 		nullableQuestID(fulfilledBy),

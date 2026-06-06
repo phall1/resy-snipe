@@ -81,27 +81,6 @@ func TestSchedulerPollSubscriptionNoSlots(t *testing.T) {
 	}
 }
 
-func TestSchedulerStartStopIdempotent(t *testing.T) {
-	t.Parallel()
-	fake := &fakeSchedulerService{}
-	clk := clock.NewFake(time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC))
-	sch := NewScheduler(fake, clk, nil)
-
-	// Multiple starts should be safe
-	sch.Start()
-	sch.Start()
-	sch.Start()
-
-	// Multiple stops should be safe
-	sch.Stop()
-	sch.Stop()
-	sch.Stop()
-
-	// Restart after stop should be safe
-	sch.Start()
-	sch.Stop()
-}
-
 func TestSchedulerPollSubscriptionAuthExpiry(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -214,5 +193,11 @@ func (f *fakeSchedulerService) PauseSubscription(ctx context.Context, userID dom
 }
 func (f *fakeSchedulerService) FulfillSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID, questID domain.QuestID) error {
 	f.fulfillCalled++
+	return nil
+}
+func (f *fakeSchedulerService) ExpireSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error {
+	return nil
+}
+func (f *fakeSchedulerService) ResumeSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error {
 	return nil
 }

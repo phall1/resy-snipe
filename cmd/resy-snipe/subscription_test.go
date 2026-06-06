@@ -39,6 +39,11 @@ type fakeSubscriptionService struct {
 	cancelID     domain.SubscriptionID
 	cancelErr    error
 	cancelCalled bool
+
+	resumeUser   domain.UserID
+	resumeID     domain.SubscriptionID
+	resumeErr    error
+	resumeCalled bool
 }
 
 var _ service.Service = (*fakeSubscriptionService)(nil)
@@ -119,6 +124,15 @@ func (f *fakeSubscriptionService) PauseSubscription(_ context.Context, _ domain.
 }
 func (f *fakeSubscriptionService) FulfillSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID, _ domain.QuestID) error {
 	return service.ErrNotImplemented
+}
+func (f *fakeSubscriptionService) ExpireSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return service.ErrNotImplemented
+}
+func (f *fakeSubscriptionService) ResumeSubscription(_ context.Context, userID domain.UserID, subID domain.SubscriptionID) error {
+	f.resumeCalled = true
+	f.resumeUser = userID
+	f.resumeID = subID
+	return f.resumeErr
 }
 
 // swapSubscriptionService installs a fake service.Service for the duration of t.
@@ -345,6 +359,48 @@ func TestSubscriptionCancelCmd_NotFound(t *testing.T) { //nolint:paralleltest //
 
 	var out bytes.Buffer
 	err := runSubscriptionCancelCmd(context.Background(), []string{"sub_missing"}, strings.NewReader(""), &out, clock.NewFake(fixedNow))
+	if err == nil {
+		t.Fatal("expected non-nil error")
+	}
+	if !errors.Is(err, service.ErrNotFound) {
+		t.Errorf("error should wrap ErrNotFound: %v", err)
+	}
+	if !strings.Contains(out.String(), "subscription not found") {
+		t.Errorf("output should say 'subscription not found': %q", out.String())
+	}
+}
+
+// --- TestSubscriptionResumeCmd ----------------------------------------------
+
+func TestSubscriptionResumeCmd(t *testing.T) { //nolint:paralleltest // mutates package-level seams.
+	fake := &fakeSubscriptionService{}
+	swapSubscriptionService(t, fake)
+
+	var out bytes.Buffer
+	err := runSubscriptionResumeCmd(context.Background(), []string{"sub_resume1"}, strings.NewReader(""), &out, clock.NewFake(fixedNow))
+	if err != nil {
+		t.Fatalf("runSubscriptionResumeCmd: %v", err)
+	}
+	if !fake.resumeCalled {
+		t.Fatal("expected ResumeSubscription to be called")
+	}
+	if fake.resumeID != "sub_resume1" {
+		t.Errorf("resumeID = %q, want sub_resume1", fake.resumeID)
+	}
+	if fake.resumeUser != testDefaultUser {
+		t.Errorf("resumeUser = %q, want %q", fake.resumeUser, testDefaultUser)
+	}
+	if !strings.Contains(out.String(), "resumed sub_resume1") {
+		t.Errorf("output missing confirmation: %q", out.String())
+	}
+}
+
+func TestSubscriptionResumeCmd_NotFound(t *testing.T) { //nolint:paralleltest // mutates package-level seams.
+	fake := &fakeSubscriptionService{resumeErr: service.ErrNotFound}
+	swapSubscriptionService(t, fake)
+
+	var out bytes.Buffer
+	err := runSubscriptionResumeCmd(context.Background(), []string{"sub_missing"}, strings.NewReader(""), &out, clock.NewFake(fixedNow))
 	if err == nil {
 		t.Fatal("expected non-nil error")
 	}

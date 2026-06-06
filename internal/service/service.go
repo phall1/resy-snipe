@@ -57,6 +57,12 @@ type Service interface {
 	// FulfillSubscription transitions a subscription to Fulfilled and records the quest ID.
 	FulfillSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID, questID domain.QuestID) error
 
+	// ExpireSubscription transitions a subscription to Expired.
+	ExpireSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error
+
+	// ResumeSubscription transitions a subscription from Paused to Active.
+	ResumeSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error
+
 	// CancelQuest signals the engine to abort a running quest.
 	// Canceling an already-terminal quest is not an error.
 	CancelQuest(ctx context.Context, userID domain.UserID, questID domain.QuestID, opts CancelOpts) error
