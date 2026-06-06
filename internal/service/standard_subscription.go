@@ -5,8 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"resy-snipe/internal/domain"
@@ -33,7 +33,8 @@ func (s *Standard) CreateSubscription(
 	}()
 	now := s.clock.Now()
 	if err := goal.Validate(now); err != nil {
-		return "", fmt.Errorf("CreateSubscription: %w", err)
+		wrapped := fmt.Errorf("CreateSubscription: %w: %w", ErrInvalidArgument, err)
+		return "", wrapped
 	}
 
 	subID, err := newSubscriptionID()
@@ -76,10 +77,6 @@ func (s *Standard) CreateSubscription(
 		return "", fmt.Errorf("CreateSubscription persist: %w", err)
 	}
 
-	s.logger.Info("subscription.created",
-		slog.String("user", string(userID)),
-		slog.String("subscription", string(subID)),
-	)
 	return subID, nil
 }
 
@@ -95,7 +92,11 @@ func (s *Standard) GetSubscription(ctx context.Context, userID domain.UserID, su
 	if err != nil {
 		return Subscription{}, mapStoreNotFound(err)
 	}
-	return toServiceSubscription(row)
+	sub, err = toServiceSubscription(row)
+	if err != nil {
+		return Subscription{}, fmt.Errorf("GetSubscription: %w", err)
+	}
+	return sub, nil
 }
 
 // ListSubscriptions returns the caller's subscriptions, narrowed by filter.
@@ -140,10 +141,60 @@ func (s *Standard) CancelSubscription(ctx context.Context, userID domain.UserID,
 	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionCancelled, nil, nil, now); err != nil {
 		return fmt.Errorf("CancelSubscription: %w", mapStoreNotFound(err))
 	}
-	s.logger.Info("subscription.cancelled",
-		slog.String("user", string(userID)),
-		slog.String("subscription", string(subID)),
-	)
+	return nil
+}
+
+// UpdateSubscriptionNextPoll updates the next_poll_at of an active subscription.
+func (s *Standard) UpdateSubscriptionNextPoll(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID, nextPollAt time.Time) (retErr error) {
+	if userID == "" {
+		return fmt.Errorf("UpdateSubscriptionNextPoll: %w: userID is required", ErrInvalidArgument)
+	}
+	defer func() {
+		s.audit(ctx, userID, actionSubscriptionUpdate, string(subID), retErr)
+	}()
+	now := s.clock.Now()
+	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionActive, nil, &nextPollAt, now); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("UpdateSubscriptionNextPoll: %w", err)
+	}
+	return nil
+}
+
+// PauseSubscription transitions a subscription to Paused (used on auth expiry).
+func (s *Standard) PauseSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) (retErr error) {
+	if userID == "" {
+		return fmt.Errorf("PauseSubscription: %w: userID is required", ErrInvalidArgument)
+	}
+	defer func() {
+		s.audit(ctx, userID, actionSubscriptionPause, string(subID), retErr)
+	}()
+	now := s.clock.Now()
+	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionPaused, nil, nil, now); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("PauseSubscription: %w", err)
+	}
+	return nil
+}
+
+// FulfillSubscription transitions a subscription to Fulfilled and records the quest ID.
+func (s *Standard) FulfillSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID, questID domain.QuestID) (retErr error) {
+	if userID == "" {
+		return fmt.Errorf("FulfillSubscription: %w: userID is required", ErrInvalidArgument)
+	}
+	defer func() {
+		s.audit(ctx, userID, actionSubscriptionFulfilled, string(subID), retErr)
+	}()
+	now := s.clock.Now()
+	if err := s.store.UpdateSubscriptionStatus(ctx, userID, subID, domain.SubscriptionFulfilled, &questID, nil, now); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("FulfillSubscription: %w", err)
+	}
 	return nil
 }
 

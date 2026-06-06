@@ -48,6 +48,15 @@ type Service interface {
 	// CancelSubscription transitions a subscription to Cancelled.
 	CancelSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error
 
+	// UpdateSubscriptionNextPoll updates the next_poll_at of an active subscription.
+	UpdateSubscriptionNextPoll(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID, nextPollAt time.Time) error
+
+	// PauseSubscription transitions a subscription to Paused (used on auth expiry).
+	PauseSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID) error
+
+	// FulfillSubscription transitions a subscription to Fulfilled and records the quest ID.
+	FulfillSubscription(ctx context.Context, userID domain.UserID, subID domain.SubscriptionID, questID domain.QuestID) error
+
 	// CancelQuest signals the engine to abort a running quest.
 	// Canceling an already-terminal quest is not an error.
 	CancelQuest(ctx context.Context, userID domain.UserID, questID domain.QuestID, opts CancelOpts) error

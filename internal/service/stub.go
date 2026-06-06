@@ -61,6 +61,21 @@ func (Stub) CancelSubscription(_ context.Context, _ domain.UserID, _ domain.Subs
 	return ErrNotImplemented
 }
 
+// UpdateSubscriptionNextPoll implements Service.
+func (Stub) UpdateSubscriptionNextPoll(_ context.Context, _ domain.UserID, _ domain.SubscriptionID, _ time.Time) error {
+	return ErrNotImplemented
+}
+
+// PauseSubscription implements Service.
+func (Stub) PauseSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID) error {
+	return ErrNotImplemented
+}
+
+// FulfillSubscription implements Service.
+func (Stub) FulfillSubscription(_ context.Context, _ domain.UserID, _ domain.SubscriptionID, _ domain.QuestID) error {
+	return ErrNotImplemented
+}
+
 // CancelQuest implements Service.
 func (Stub) CancelQuest(_ context.Context, _ domain.UserID, _ domain.QuestID, _ CancelOpts) error {
 	return ErrNotImplemented
